@@ -2,11 +2,17 @@
 
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { createPool, type Pool, rollbackCatalog } from "@app/db";
 import pg from "pg";
 import { benchShuffle } from "./commands/bench-shuffle";
 import { countCatalog, writeReport } from "./commands/catalog-count";
 import { generateDump } from "./commands/dump-generate";
 import { sampleIdsFromDump, validateSample } from "./commands/yt-sample";
+import { loadEnv, requireDatabaseUrl } from "./env";
+import { runIngest } from "./ingest/run";
+import { JOBS, jobByName } from "./jobs/registry";
+import { syncPlayable } from "./jobs/youtube-state";
+import { startWorker } from "./main";
 
 /** pnpm runs scripts from the package folder; resolve paths against where the user ran it. */
 function userPath(p: string): string {
@@ -15,7 +21,118 @@ function userPath(p: string): string {
 
 type Command = { usage: string; run: (args: string[]) => Promise<number> };
 
+async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
+  const pool = createPool(requireDatabaseUrl(loadEnv()), { max: 6 });
+  try {
+    return await fn(pool);
+  } finally {
+    await pool.end();
+  }
+}
+
+function printJson(value: unknown): void {
+  console.log(JSON.stringify(value, null, 2));
+}
+
 const commands: Record<string, Command> = {
+  start: {
+    usage: "start   (run the scheduler and every job on pg-boss)",
+    async run() {
+      const stop = await startWorker();
+      await new Promise<void>((resolve) => {
+        for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, () => resolve());
+      });
+      await stop();
+      return 0;
+    },
+  },
+  job: {
+    usage: `job <${JOBS.map((j) => j.name).join("|")}>   (run one job now, in this process)`,
+    async run(args) {
+      const name = args[0];
+      if (!name) throw new Error("job needs a name");
+      const job = jobByName(name);
+      const env = loadEnv();
+      return withPool(async (pool) => {
+        printJson(await job.run({ pool, env, log: (m) => console.error(m) }, {}));
+        return 0;
+      });
+    },
+  },
+  ingest: {
+    usage: "ingest [--file dump.xml.gz --dump-date YYYY-MM-DD --allow-unverified] [--force]",
+    async run(args) {
+      const { values } = parseArgs({
+        args,
+        options: {
+          file: { type: "string" },
+          "dump-date": { type: "string" },
+          force: { type: "boolean", default: false },
+          "allow-unverified": { type: "boolean", default: false },
+        },
+      });
+      const env = loadEnv();
+      return withPool(async (pool) => {
+        const outcome = await runIngest(
+          { pool, baseUrl: env.DISCOGS_DUMPS_BASE_URL, log: (m) => console.error(m) },
+          {
+            file: values.file ? userPath(values.file) : undefined,
+            dumpDate: values["dump-date"],
+            force: values.force,
+            allowUnverified: values["allow-unverified"],
+          },
+        );
+        printJson(outcome);
+        return 0;
+      });
+    },
+  },
+  "ingest:rollback": {
+    usage: "ingest:rollback   (swap last month's catalog back in)",
+    async run() {
+      return withPool(async (pool) => {
+        const client = await pool.connect();
+        try {
+          await rollbackCatalog(client);
+          await syncPlayable(pool);
+          await pool.query(
+            "update ingest_runs set status = 'rolled_back' where dump_date = (select max(dump_date) from ingest_runs where status = 'succeeded')",
+          );
+        } finally {
+          client.release();
+        }
+        console.error("Rolled back to the previous catalog.");
+        return 0;
+      });
+    },
+  },
+  "changelog:list": {
+    usage: "changelog:list   (drafts and published entries)",
+    async run() {
+      return withPool(async (pool) => {
+        const res = await pool.query(
+          "select id, kind, title, draft, published_at from changelog_entries order by created_at desc limit 50",
+        );
+        printJson(res.rows);
+        return 0;
+      });
+    },
+  },
+  "changelog:publish": {
+    usage: "changelog:publish <id>",
+    async run(args) {
+      const id = args[0];
+      if (!id) throw new Error("changelog:publish needs an entry id");
+      return withPool(async (pool) => {
+        const res = await pool.query(
+          "update changelog_entries set draft = false, published_at = coalesce(published_at, now()) where id = $1",
+          [id],
+        );
+        console.error(res.rowCount ? "Published." : "No such entry.");
+        return res.rowCount ? 0 : 1;
+      });
+    },
+  },
   "catalog:count": {
     usage: "catalog:count <url|file> [--out reports/count.json] [--verify] [--gzip|--no-gzip]",
     async run(args) {

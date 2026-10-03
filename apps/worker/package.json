@@ -6,7 +6,9 @@
   "scripts": {
     "cli": "node --max-old-space-size=8192 --import tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "node build.mjs",
+    "start": "node --enable-source-maps dist/cli.js start"
   },
   "dependencies": {
     "@app/core": "workspace:*",
@@ -18,10 +20,14 @@
     "pg-boss": "12.36.0",
     "@aws-sdk/client-s3": "3.1146.0",
     "@aws-sdk/lib-storage": "3.1146.0",
-    "@sentry/node": "11.4.0"
+    "@sentry/node": "11.4.0",
+    "drizzle-orm": "0.45.3",
+    "pg-copy-streams": "7.0.0",
+    "saxes": "6.0.0"
   },
   "devDependencies": {
     "tsx": "4.23.15",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "esbuild": "0.28.2"
   }
 }

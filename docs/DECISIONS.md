@@ -77,3 +77,24 @@ migrations stay the single source of truth, a catalog migration flows into the n
 automatically, and the swap renames tables, constraints and indexes so live names never
 drift. A rollback with `ingest:rollback` is only valid when no catalog migration ran since
 the swap.
+
+## 10. The checksum is verified before the build, and old_* survives failed runs
+
+The spec lists "verify" after "build". The hash is known as soon as the stream ends, so the
+ingest verifies right after staging and never builds from a bad download. Last month's `old_*`
+tables are dropped inside the swap transaction, not at the start of the next run, so a failed
+or rejected run never removes the ability to roll back.
+
+## 11. The style census counts playable records, refreshed daily
+
+The census counts records with at least one playable video, so the filter drawer's numbers
+match what the shuffle can return. Before any video has been validated (the first ingest), it
+counts every record and says so with `basis: "all"`. A daily `refresh_census` job recomputes
+the newest dump's census as validation moves playability.
+
+## 12. Player reports and link suggestions are rows, not web-enqueued jobs
+
+The web app writes `video_reports` and `link_suggestions` rows; the worker's
+`recheck_reported` and `validate_link_suggestions` jobs pick them up every 10 minutes. The web
+app never needs a pg-boss connection, and a reported video is rechecked at most once an hour
+however often it is reported.

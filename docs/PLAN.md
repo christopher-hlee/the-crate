@@ -56,17 +56,17 @@ on Supabase (see `docs/phase-0-report.md`).
 
 ## Phase 1: web app, Free tier
 
-- [ ] Ingest end to end: discover → stream (hash + optional R2 multipart + parse) → COPY into
+- [x] Ingest end to end: discover → stream (hash + optional R2 multipart + parse) → COPY into
       `stg_release_facts`, `stg_releases`, `stg_release_videos` → build `stg_record_videos`
       (pressings, earliest year, country rule, unions, label sizes, deep-cut, track matches,
       carried `rand_key`, accepted suggestions, `playable` from `yt_videos`) → verify the
       checksum → swap with canonical index names → diff, census, changelog draft.
       `ingest:rollback` swaps `old_*` back.
-- [ ] Fixture dump server (`DISCOGS_DUMPS_BASE_URL`) and an integration test that runs a
+- [x] Fixture dump server (`DISCOGS_DUMPS_BASE_URL`) and an integration test that runs a
       fixture dump through stage, build, swap and diff, twice, checking carry-over.
-- [ ] `packages/youtube`: videos.list client with injectable fetch, zod response schema,
+- [x] `packages/youtube`: videos.list client with injectable fetch, zod response schema,
       classification into statuses, quotaExceeded handling, recorded responses for tests.
-- [ ] Jobs on pg-boss (singleton, rerunnable): `ingest`, `validate`, `recheck_reported`,
+- [x] Jobs on pg-boss (singleton, rerunnable): `ingest`, `validate`, `recheck_reported`,
       `purge_yt_data`, `validate_link_suggestions`, `refresh_census`, `retry_account_deletions`.
 - [ ] API: shuffle (narrow-filter cache, region, session, seen, history exclusions), records,
       styles, filters/count, plays, history, crates (+ items), changelog, me (GET, DELETE),

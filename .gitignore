@@ -7,6 +7,7 @@ coverage/
 generated/
 *.tsbuildinfo
 .env
+!.env.example
 .env.local
 .env.*.local
 reports/
