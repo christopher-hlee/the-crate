@@ -1,0 +1,17 @@
+{
+  "name": "@app/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app/core": "workspace:*",
+    "zod": "4.6.5"
+  }
+}
