@@ -1,0 +1,43 @@
+appId: ${APP_ID}
+name: Sandbox purchase of Pro (TestFlight or Play internal build, sandbox tester signed in)
+---
+- launchApp
+- tapOn:
+    id: tab-account
+- runFlow:
+    when:
+      visible: Sign in to keep crates and history across devices.
+    commands:
+      - tapOn:
+          id: sign-in
+      - tapOn:
+          id: dev-sign-in
+          optional: true
+- tapOn:
+    id: tab-account
+- assertVisible:
+    id: plan
+- tapOn:
+    id: buy-MONTHLY
+# The store's own purchase sheet.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: Subscribe
+          optional: true
+      - tapOn:
+          text: OK
+          optional: true
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          text: Subscribe
+          optional: true
+- extendedWaitUntil:
+    visible: Welcome to Pro. It can take a moment to show up everywhere.
+    timeout: 60000
+- assertVisible: Restore purchases

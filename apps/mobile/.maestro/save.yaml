@@ -1,0 +1,36 @@
+appId: ${APP_ID}
+name: Save a pick to a new crate (dev sign-in build)
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: tab-account
+- tapOn:
+    id: sign-in
+- tapOn:
+    id: dev-sign-in
+- tapOn:
+    id: tab-dig
+- extendedWaitUntil:
+    notVisible: Finding a record
+    timeout: 20000
+- tapOn:
+    id: save
+- tapOn:
+    id: new-crate-name
+- inputText: Maestro crate
+- tapOn: Create and save
+- extendedWaitUntil:
+    visible: Saved to Maestro crate.
+    timeout: 10000
+# Long-press the card now saves to the same crate, with a haptic tick.
+- longPressOn:
+    id: pick-card
+- tapOn:
+    id: tab-crates
+- assertVisible: Maestro crate
+- tapOn: Maestro crate
+- assertVisible:
+    id: player-webview
+- assertVisible:
+    id: item-0

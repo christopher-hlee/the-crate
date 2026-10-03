@@ -1,0 +1,9 @@
+# Maestro flows for the device builds (Phase 3 "done when"). Run against a development or
+# internal build made with EXPO_PUBLIC_AUTH_MODE=dev for launch/shuffle/save, and against a
+# TestFlight or Play internal build with a sandbox tester for the purchase flow:
+#   maestro test -e APP_ID=com.example.cratedig apps/mobile/.maestro
+flows:
+  - launch.yaml
+  - shuffle.yaml
+  - save.yaml
+  - purchase.yaml

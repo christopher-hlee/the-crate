@@ -1,0 +1,21 @@
+{
+  "name": "@app/player-html",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node scripts/build.mjs && tsc -p tsconfig.json",
+    "test": "node scripts/build.mjs && vitest run"
+  },
+  "dependencies": {
+    "@app/core": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

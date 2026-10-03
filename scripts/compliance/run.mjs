@@ -139,10 +139,22 @@ function main() {
     console.log(`✓ No Google API key in ${builtDirs.length} built bundle folder(s)`);
   }
 
-  const webBuilt = existsSync(join(root, "apps/web/.next"));
-  if (process.env.CI && existsSync(join(root, "apps/web/package.json")) && !webBuilt) {
-    failed = true;
-    console.error("✗ apps/web/.next is missing: build the web app before the compliance scan");
+  // In CI a missing bundle is a failure, not a pass: COMPLIANCE_REQUIRE names the bundles a
+  // job must have built (default "web"; the mobile job sets "mobile").
+  const requiredDirs = { web: "apps/web/.next", mobile: "apps/mobile/dist" };
+  const required = (process.env.COMPLIANCE_REQUIRE ?? (process.env.CI ? "web" : ""))
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const name of required) {
+    const dir = requiredDirs[name];
+    if (!dir) {
+      failed = true;
+      console.error(`✗ Unknown COMPLIANCE_REQUIRE entry: ${name}`);
+    } else if (!existsSync(join(root, dir))) {
+      failed = true;
+      console.error(`✗ ${dir} is missing: build it before the compliance scan`);
+    }
   }
 
   process.exit(failed ? 1 : 0);

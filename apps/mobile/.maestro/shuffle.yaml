@@ -1,0 +1,30 @@
+appId: ${APP_ID}
+name: Shuffle and swipe move to new picks
+---
+- launchApp
+- extendedWaitUntil:
+    notVisible: Finding a record
+    timeout: 20000
+- copyTextFrom:
+    id: pick-title
+- evalScript: ${output.first = maestro.copiedText}
+- tapOn:
+    id: shuffle
+- extendedWaitUntil:
+    notVisible: ${output.first}
+    timeout: 15000
+- copyTextFrom:
+    id: pick-title
+- evalScript: ${output.second = maestro.copiedText}
+# Swipe left on the pick card (never on the player) for the next record.
+- swipe:
+    from:
+      id: pick-card
+    direction: LEFT
+- extendedWaitUntil:
+    notVisible: ${output.second}
+    timeout: 15000
+- tapOn:
+    id: filters
+- assertVisible:
+    id: filter-panel

@@ -44,6 +44,8 @@ pnpm db:migrate              # apply migrations to DATABASE_URL
 pnpm worker <command>        # worker CLI, e.g. `pnpm worker catalog:count fixtures/discogs/small.xml`
 pnpm --filter @app/web dev   # web app on http://localhost:3000
 pnpm --filter @app/web e2e   # Playwright end-to-end and compliance specs
+pnpm --filter @app/mobile start   # Expo dev server (EXPO_PUBLIC_API_URL, EXPO_PUBLIC_AUTH_MODE=dev)
+pnpm --filter @app/mobile export  # iOS + Android bundles into apps/mobile/dist (scanned by compliance)
 ```
 
 Postgres: `postgres://crate:crate@localhost:5433/crate`. Integration tests create a fresh

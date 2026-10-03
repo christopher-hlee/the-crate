@@ -77,3 +77,22 @@ jobs:
           path: |
             apps/web/test-results
             apps/web/playwright-report
+
+  mobile:
+    name: Mobile bundle (Expo export and compliance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @app/player-html build
+      - run: pnpm --filter @app/mobile export
+        env:
+          EXPO_OFFLINE: "1"
+      - run: pnpm compliance
+        env:
+          COMPLIANCE_REQUIRE: mobile

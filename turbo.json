@@ -5,7 +5,8 @@
     "DATABASE_URL",
     "DIRECT_DATABASE_URL",
     "CI",
-    "PLAYWRIGHT_BROWSERS_PATH"
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "COMPLIANCE_REQUIRE"
   ],
   "tasks": {
     "build": {

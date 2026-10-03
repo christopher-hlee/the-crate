@@ -158,3 +158,50 @@ set at Gate 3.
 
 The spec builds it only if the quota extension is granted. `FEATURE_PLAYLIST_EXPORT` exists and
 stays off; nothing reads it yet.
+
+## 21. NativeWind 4 on Tailwind 3 in the mobile app
+
+NativeWind 4 is the stable release and runs on Tailwind CSS 3; the web app is on Tailwind 4.
+The design tokens are repeated in `apps/mobile/tailwind.config.js` with the same names as the
+web's CSS variables. Revisit when NativeWind 5 (Tailwind 4) is stable. Under pnpm the app
+depends on `react-native-css-interop` directly so Metro can resolve NativeWind's JSX runtime.
+
+## 22. Player bridge details
+
+Both sides validate every message with zod (`zod/mini` inside the page, to keep the page script
+small). Native code queues a `load` until the page says `ready`, and the page queues one until
+the IFrame API is ready, so the first pick is never lost. While a video plays the page sends a
+`state` message every second; native code counts those ticks toward the 5-second play log, so
+paused or buffering time doesn't count. The page script is bundled to ES2022 for iOS 16 and
+Android System WebView 110 or newer.
+
+## 23. On mobile, Dig's player sits outside the scroll view
+
+The spec asks for an IntersectionObserver before autoplay. On mobile the Dig and list screens
+put the player above the scroll view, so whenever the screen is focused the whole player is on
+screen and the 50% rule holds by construction. Playback still starts only on a tap or a swipe,
+the first pick is cued, and the player pauses when the screen loses focus or the app leaves the
+foreground. Gestures attach to the pick card below the player, never to the player.
+
+## 24. Mobile exclusions are kept in memory
+
+The session list and the signed-out seen list live in memory for the app's lifetime. The only
+persistent store in the app is the keychain or keystore (for the session), which is meant for
+secrets, not 200-entry lists. Signed-in users' seen list is their server-side history anyway.
+
+## 25. Long-press saves to the last crate used
+
+The first save opens the inline crate picker; after that a long-press on the pick card saves to
+the crate used last in this session, with a success haptic.
+
+## 26. Mobile billing is store-only
+
+The apps sell Pro only through in-app purchase (RevenueCat), never link to Stripe Checkout, and
+show "Restore purchases". A Pro bought on the web shows as Pro in the app through `/me`, with a
+note that it is managed on the web.
+
+## 27. CI exports the mobile bundles; Maestro runs on device builds
+
+CI runs `expo export` for iOS and Android and scans the Hermes bundles for API keys. The Maestro
+flows in `apps/mobile/.maestro` need a simulator or device build (EAS), so they run against
+TestFlight and Play internal builds, which are owner actions at Gate 4.

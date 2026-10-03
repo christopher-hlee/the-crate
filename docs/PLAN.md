@@ -105,14 +105,18 @@ cancellation on real accounts.
 
 ## Phase 3: mobile
 
-- [ ] `packages/player-html`: the IFrame page as an HTML string, zod-validated bridge
+- [x] `packages/player-html`: the IFrame page as an HTML string, zod-validated bridge
       (`ready`, `load`, `play`, `pause`, `seek`, `state`, `error`), `playerBaseUrl(appId)`.
-- [ ] Expo app: Dig, Crates, History, Account on `@app/api-client`; WebView with `baseUrl`,
+- [x] Expo app: Dig, Crates, History, Account on `@app/api-client`; WebView with `baseUrl`,
       `allowsInlineMediaPlayback`; pause on background; swipe, long-press, haptics; offline state.
-- [ ] RevenueCat purchases on the shared `pro` entitlement. Store listing copy and review notes.
-- [ ] Maestro flows: launch, shuffle, save, sandbox purchase.
+- [x] RevenueCat purchases on the shared `pro` entitlement. Store listing copy and review notes
+      (`docs/store-listing.md`).
+- [x] Maestro flows: launch, shuffle, save, sandbox purchase (`apps/mobile/.maestro`). CI exports
+      and scans the iOS and Android bundles.
 
-Gate 4 (needs the owner): App Review and Google Play review.
+Gate 4 (needs the owner): the final name and app IDs, EAS builds to TestFlight and Play
+internal testing, the Maestro flows on those builds, RevenueCat products and keys, a Pro demo
+account, then App Review and Google Play review (checklist in `docs/store-listing.md`).
 
 ## Phase 4: cleared lane (behind `FEATURE_CLEARED_LANE`, unlisted)
 

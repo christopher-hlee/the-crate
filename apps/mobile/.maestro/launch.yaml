@@ -1,0 +1,17 @@
+appId: ${APP_ID}
+name: Launch shows one player and a cued pick
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: player-webview
+    timeout: 20000
+- assertVisible:
+    id: pick-card
+- extendedWaitUntil:
+    notVisible: Finding a record
+    timeout: 20000
+- assertVisible: Shuffle
+- assertVisible: View on Discogs
+- assertVisible: Video on YouTube
