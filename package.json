@@ -1,0 +1,29 @@
+{
+  "name": "the-crate",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "verify": "biome ci . && turbo run typecheck test build && pnpm compliance",
+    "lint": "biome check .",
+    "fix": "biome check --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "compliance": "node scripts/compliance/run.mjs",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "pnpm --filter @app/db migrate",
+    "worker": "pnpm --filter @app/worker cli",
+    "catalog:count": "pnpm --filter @app/worker cli catalog:count"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "24.19.1",
+    "turbo": "2.11.7",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}
