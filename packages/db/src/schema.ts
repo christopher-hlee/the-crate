@@ -188,6 +188,8 @@ export type StyleCensusEntry = {
   cooccurring: [string, number][];
 };
 export type Census = {
+  /** "playable" once validation has run; "all" before any video has been checked. */
+  basis: "playable" | "all";
   totalRecords: number;
   styles: Record<string, StyleCensusEntry>;
   genres: Record<string, number>;

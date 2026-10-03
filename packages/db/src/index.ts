@@ -1,3 +1,4 @@
+export * from "./catalog";
 export * from "./client";
 export * from "./copy";
 export * from "./migrate";

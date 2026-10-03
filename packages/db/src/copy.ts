@@ -108,6 +108,13 @@ export class CopyWriter {
       await once(this.stream as unknown as NodeJS.EventEmitter, "drain");
   }
 
+  /** Aborts the COPY; the server discards every row sent so far. */
+  abort(err: unknown): void {
+    this.buffer = "";
+    const s = this.stream as unknown as { destroy(e?: Error): void };
+    s.destroy(err instanceof Error ? err : new Error(String(err)));
+  }
+
   async end(): Promise<number> {
     await this.flush();
     this.stream.end();
