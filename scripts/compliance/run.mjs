@@ -37,7 +37,7 @@ export const BANNED_PACKAGES = [
   "@spotify/web-api-ts-sdk",
 ];
 
-const KEY_PATTERN = /AIza[0-9A-Za-z_-]{35}/;
+const KEY_PATTERN = /AIza[0-9A-Za-z_-]{30,}/;
 const TEXT_EXTENSIONS = new Set([
   ".js",
   ".mjs",

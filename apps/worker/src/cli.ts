@@ -7,6 +7,7 @@ import pg from "pg";
 import { benchShuffle } from "./commands/bench-shuffle";
 import { countCatalog, writeReport } from "./commands/catalog-count";
 import { generateDump } from "./commands/dump-generate";
+import { e2eSeed } from "./commands/e2e-seed";
 import { sampleIdsFromDump, validateSample } from "./commands/yt-sample";
 import { loadEnv, requireDatabaseUrl } from "./env";
 import { runIngest } from "./ingest/run";
@@ -270,6 +271,31 @@ const commands: Record<string, Command> = {
       } finally {
         await client.end();
       }
+    },
+  },
+  "e2e:seed": {
+    usage:
+      "e2e:seed [--database crate_e2e] [--releases 3000]   (uses BENCH_ADMIN_DATABASE_URL or TEST_DATABASE_URL)",
+    async run(args) {
+      const { values } = parseArgs({
+        args,
+        options: {
+          database: { type: "string", default: "crate_e2e" },
+          releases: { type: "string", default: "3000" },
+        },
+      });
+      const adminUrl =
+        process.env.TEST_DATABASE_URL ??
+        process.env.BENCH_ADMIN_DATABASE_URL ??
+        "postgres://crate:crate@localhost:5433/postgres";
+      const res = await e2eSeed({
+        adminUrl,
+        database: values.database,
+        releases: Number(values.releases),
+        log: (m) => console.error(m),
+      });
+      printJson(res);
+      return 0;
     },
   },
   "dump:generate": {
