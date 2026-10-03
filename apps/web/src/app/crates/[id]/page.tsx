@@ -3,9 +3,10 @@
 import { ApiError, type CrateDetail, type CrateItem } from "@app/api-client";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CrateProTools } from "@/components/CrateProTools";
 import { ItemListPlayer } from "@/components/ItemListPlayer";
+import { SequenceList } from "@/components/SequenceList";
 import { SignInPrompt } from "@/components/SignInPrompt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,8 @@ export default function CratePage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [view, setView] = useState<"saved" | "sequence">("saved");
+  const loadSequence = useCallback((page: number) => api.sequence(id, page), [id]);
 
   useEffect(() => {
     if (!me) return;
@@ -97,44 +100,80 @@ export default function CratePage() {
         )}
       </div>
       <CrateProTools crate={data.crate} onChange={(crate) => setData({ ...data, crate })} />
-      <ItemListPlayer
-        items={data.items}
-        emptyText="This crate is empty. Press Save on the Dig screen to add records."
-        actions={(item, i) => (
-          <span className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Move up"
-              onClick={() => void move(i, -1)}
-              disabled={i === 0}
-            >
-              <ArrowUp size={16} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Move down"
-              onClick={() => void move(i, 1)}
-              disabled={i === data.items.length - 1}
-            >
-              <ArrowDown size={16} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Remove from crate"
-              onClick={async () =>
-                setData(
-                  await api.removeItem(id, { recordKey: item.recordKey, videoId: item.videoId }),
-                )
-              }
-            >
-              <Trash2 size={16} />
-            </Button>
-          </span>
-        )}
-      />
+      {data.crate.seed !== null && (
+        // One player per screen: the seeded order and the saved records are tabs, never both.
+        <div className="flex gap-2" role="tablist" aria-label="Crate view">
+          <Button
+            role="tab"
+            aria-selected={view === "saved"}
+            variant={view === "saved" ? "primary" : "outline"}
+            size="sm"
+            onClick={() => setView("saved")}
+          >
+            Saved records
+          </Button>
+          <Button
+            role="tab"
+            aria-selected={view === "sequence"}
+            variant={view === "sequence" ? "primary" : "outline"}
+            size="sm"
+            onClick={() => setView("sequence")}
+          >
+            Seeded order
+          </Button>
+        </div>
+      )}
+      {data.crate.seed !== null && view === "sequence" ? (
+        <section className="space-y-2" aria-label="Seeded order">
+          <p className="text-sm text-ink-2">
+            The same order every time for these filters and seed: share it and others dig the same
+            sequence.
+          </p>
+          <SequenceList
+            load={loadSequence}
+            emptyText="Nothing matches this crate's filters right now."
+          />
+        </section>
+      ) : (
+        <ItemListPlayer
+          items={data.items}
+          emptyText="This crate is empty. Press Save on the Dig screen to add records."
+          actions={(item, i) => (
+            <span className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Move up"
+                onClick={() => void move(i, -1)}
+                disabled={i === 0}
+              >
+                <ArrowUp size={16} />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Move down"
+                onClick={() => void move(i, 1)}
+                disabled={i === data.items.length - 1}
+              >
+                <ArrowDown size={16} />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Remove from crate"
+                onClick={async () =>
+                  setData(
+                    await api.removeItem(id, { recordKey: item.recordKey, videoId: item.videoId }),
+                  )
+                }
+              >
+                <Trash2 size={16} />
+              </Button>
+            </span>
+          )}
+        />
+      )}
     </div>
   );
 }

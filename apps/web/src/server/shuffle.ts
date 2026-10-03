@@ -23,6 +23,7 @@ export function toPick(row: PickRow, thumbnailUrl: string | null): ShufflePick {
   return {
     recordKey: row.record_key,
     videoId: row.video_id,
+    releaseId: row.release_id,
     track:
       row.track_position && row.track_title
         ? { position: row.track_position, title: row.track_title }

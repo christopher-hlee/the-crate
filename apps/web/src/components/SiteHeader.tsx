@@ -8,6 +8,7 @@ import { useViewer } from "@/lib/viewer";
 
 const NAV = [
   { href: "/", label: "Dig" },
+  { href: "/daily", label: "Daily" },
   { href: "/crates", label: "Crates" },
   { href: "/history", label: "History" },
   { href: "/changelog", label: "Changelog" },

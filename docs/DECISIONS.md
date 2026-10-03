@@ -126,3 +126,35 @@ describes. Saved-record lists show generated sleeves instead of thumbnails.
 Google API keys are `AIza` plus 35 characters. The compliance scan fails on `AIza` plus 30 or
 more, so a truncated or mangled key fails too, without matching the bare four letters that can
 occur inside unrelated base64.
+
+## 17. Endpoints the API table implies but doesn't list
+
+`POST /api/v1/billing/checkout` and `POST /api/v1/billing/portal` (Stripe Checkout and the
+Customer Portal) and `GET /api/v1/daily` (the daily dig) are added. Seeded sequences
+(`/crates/:id/sequence`, `/daily`) return full catalog items rather than bare keys so clients
+can render a page without a second request, and `ShufflePick` gains `releaseId` because tempo
+and key votes are keyed by (release, track position).
+
+## 18. One `pro` entitlement across Stripe and the stores
+
+Stripe webhooks and RevenueCat webhooks both write `subscriptions` through `mergeSubscription`:
+an event from one source never ends an active Pro from another source that runs longer, and a
+store cancellation keeps Pro until the paid period ends. RevenueCat's `app_user_id` is the
+Supabase user ID (the app logs in to RevenueCat with it); anonymous IDs are ignored unless an
+alias is a user ID. RevenueCat's own Stripe events are ignored because Stripe is handled
+directly.
+
+## 19. Tempo sources and community confidence
+
+GetSongBPM rows carry confidence 0.8 and AcousticBrainz rows 0.5. Community estimates use the
+median of listener votes (half and double time count as agreeing) with confidence
+`0.3 + 0.15 × agreeing votes`, capped at 0.95, so four agreeing votes outrank GetSongBPM. A
+voted key is used only once two votes agree. GetSongBPM requests are counted in `rate_limits`
+under `svc:getsongbpm` per clock hour and stop at 2,500; a lookup that finds nothing is stored
+with no BPM so it isn't repeated for 180 days. The job stays off until `FEATURE_GETSONGBPM` is
+set at Gate 3.
+
+## 20. YouTube playlist export is not built
+
+The spec builds it only if the quota extension is granted. `FEATURE_PLAYLIST_EXPORT` exists and
+stays off; nothing reads it yet.

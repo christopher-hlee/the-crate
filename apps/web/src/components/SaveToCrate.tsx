@@ -1,6 +1,7 @@
 "use client";
 
 import { ApiError, type Crate } from "@app/api-client";
+import { type Filters, newSeed } from "@app/core";
 import { Check, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -11,6 +12,8 @@ import { useViewer } from "@/lib/viewer";
 
 type Props = {
   item: { recordKey: string; videoId: string };
+  /** Pro: offer to seed a new crate with the current filters. */
+  seedFilters?: Filters | null;
   open: boolean;
   onClose: () => void;
   onSaved: (crateName: string) => void;
@@ -20,12 +23,13 @@ type Props = {
  * Inline crate picker. It expands in the page flow below the controls, never as a floating
  * menu, so nothing can land on top of the player.
  */
-export function SaveToCrate({ item, open, onClose, onSaved }: Props) {
+export function SaveToCrate({ item, seedFilters, open, onClose, onSaved }: Props) {
   const { me } = useViewer();
   const [crates, setCrates] = useState<Crate[] | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
     if (!open || !me) return;
@@ -69,7 +73,11 @@ export function SaveToCrate({ item, open, onClose, onSaved }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const crate = await api.createCrate({ name: name.trim() });
+      const crate = await api.createCrate(
+        seeded && seedFilters
+          ? { name: name.trim(), filters: seedFilters, seed: newSeed() }
+          : { name: name.trim() },
+      );
       setName("");
       await save(crate.id, crate.name);
     } catch (err) {
@@ -125,6 +133,12 @@ export function SaveToCrate({ item, open, onClose, onSaved }: Props) {
           <Plus size={14} aria-hidden /> Create
         </Button>
       </form>
+      {seedFilters && (
+        <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
+          <input type="checkbox" checked={seeded} onChange={(e) => setSeeded(e.target.checked)} />
+          Seed the new crate with these filters, for a shareable order anyone can replay
+        </label>
+      )}
       {error && <p className="text-warn">{error}</p>}
     </div>
   );

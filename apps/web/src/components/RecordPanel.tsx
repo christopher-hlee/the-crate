@@ -41,6 +41,17 @@ export function RecordPanel({ pick, detail, onScope, canScope }: Props) {
             <Badge title={`Tempo source: ${pick.tempo.source}`}>
               {Math.round(pick.tempo.bpm)} BPM
               {pick.tempo.camelotKey ? ` · ${pick.tempo.camelotKey}` : ""}
+              {pick.tempo.source === "getsongbpm" && (
+                <a
+                  href="https://getsongbpm.com"
+                  target="_blank"
+                  rel="noopener"
+                  className="underline"
+                >
+                  via GetSongBPM
+                </a>
+              )}
+              {pick.tempo.source === "community" && <span>· listener votes</span>}
             </Badge>
           )}
         </div>

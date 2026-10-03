@@ -88,17 +88,20 @@ YouTube's API Compliance Audit.
 
 ## Phase 2: Pro on the web
 
-- [ ] `subscriptions` gating; Stripe Checkout, Customer Portal and webhook; RevenueCat webhook.
-- [ ] Pro filters: tempo range with half and double time, compatible Camelot keys, max views
+- [x] `subscriptions` gating; Stripe Checkout, Customer Portal and webhook; RevenueCat webhook.
+- [x] Pro filters: tempo range with half and double time, compatible Camelot keys, max views
       (YouTube's count, filter only, never a score), deep-cut, format notes, label and artist.
-- [ ] `enrich_tempo` behind `FEATURE_GETSONGBPM` (2,500 requests an hour), `pick_audio_features`,
+- [x] `enrich_tempo` behind `FEATURE_GETSONGBPM` (2,500 requests an hour), `pick_audio_features`,
       community votes from tap tempo and key, tempo coverage per filter set and crate.
-- [ ] AcousticBrainz spike write-up and an importer for a MusicBrainz-linked mapping file.
-- [ ] Seeded crates and sequence paging (first 500 cached for 24 h), share links, daily dig,
+- [x] AcousticBrainz spike write-up and an importer for a MusicBrainz-linked mapping file.
+- [x] Seeded crates and sequence paging (first 500 cached for 24 h), share links, daily dig,
       timestamped notes, 1,000-play history, crate sheet export (CSV, JSON, links only).
-- [ ] Playwright: Pro gating and export.
+- [x] Playwright: Pro gating and export.
 
 Gate 3 (needs the owner): GetSongBPM's answer on caching. The flag stays off until then.
+Also owed: Stripe products and prices, the Stripe and RevenueCat webhooks (see RUNBOOK), the
+AcousticBrainz mapping run (docs/spikes/acousticbrainz.md), and a Pro purchase, use and
+cancellation on real accounts.
 
 ## Phase 3: mobile
 

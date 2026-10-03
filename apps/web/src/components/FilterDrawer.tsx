@@ -348,7 +348,12 @@ export function FilterDrawer({ filters, onChange, census, isPro, searchRef }: Pr
         </div>
       </Section>
 
-      <ProFilters filters={filters} set={set} isPro={isPro} />
+      <ProFilters
+        filters={filters}
+        set={set}
+        isPro={isPro}
+        coverage={count?.tempoCoverage ?? null}
+      />
     </div>
   );
 }
@@ -357,10 +362,12 @@ function ProFilters({
   filters,
   set,
   isPro,
+  coverage,
 }: {
   filters: Filters;
   set: (p: Partial<Filters>) => void;
   isPro: boolean;
+  coverage: number | null;
 }) {
   const disabled = !isPro;
   return (
@@ -421,6 +428,11 @@ function ProFilters({
           />
           Include half and double time
         </label>
+        {coverage !== null && (
+          <p className="text-xs text-ink-2" data-testid="tempo-coverage">
+            Tempo known for {Math.round(coverage * 100)}% of these matches.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1">
             <span className="text-xs text-ink-2">Key (Camelot)</span>

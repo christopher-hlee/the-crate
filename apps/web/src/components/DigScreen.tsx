@@ -14,7 +14,7 @@ import {
   normalizeFilters,
   stableStringify,
 } from "@app/core";
-import { Bookmark, NotebookPen, Shuffle, SlidersHorizontal } from "lucide-react";
+import { Bookmark, Gauge, NotebookPen, Shuffle, SlidersHorizontal } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdSlot } from "@/components/AdSlot";
@@ -23,6 +23,7 @@ import { NotePanel } from "@/components/NotePanel";
 import { Player, type PlayerRequest } from "@/components/Player";
 import { RecordPanel } from "@/components/RecordPanel";
 import { SaveToCrate } from "@/components/SaveToCrate";
+import { TempoVotePanel } from "@/components/TempoVotePanel";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -66,6 +67,7 @@ export function DigScreen() {
   const [busy, setBusy] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [tempoOpen, setTempoOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [startSeconds, setStartSeconds] = useState(0);
   const tokenRef = useRef(0);
@@ -116,6 +118,7 @@ export function DigScreen() {
       setEmpty(false);
       setSaveOpen(false);
       setNoteOpen(false);
+      setTempoOpen(false);
       sessionRecords.add(pick.recordKey);
       if (!me) seenVideos.add(pick.videoId);
       tokenRef.current += 1;
@@ -280,6 +283,13 @@ export function DigScreen() {
             <NotebookPen size={16} aria-hidden /> Note
           </Button>
           <Button
+            onClick={() => setTempoOpen((o) => !o)}
+            disabled={!current || !isPro}
+            title={isPro ? "Tap tempo and key votes" : "Tempo and key votes are a Pro tool"}
+          >
+            <Gauge size={16} aria-hidden /> Tempo
+          </Button>
+          <Button
             className="lg:hidden"
             variant="outline"
             onClick={() => setFiltersOpen((o) => !o)}
@@ -321,9 +331,18 @@ export function DigScreen() {
         {current && (
           <SaveToCrate
             item={{ recordKey: current.recordKey, videoId: current.videoId }}
+            seedFilters={isPro ? filters : null}
             open={saveOpen}
             onClose={() => setSaveOpen(false)}
             onSaved={(name) => setNotice(`Saved to ${name}.`)}
+          />
+        )}
+        {current && isPro && (
+          <TempoVotePanel
+            open={tempoOpen}
+            onClose={() => setTempoOpen(false)}
+            releaseId={current.releaseId}
+            track={current.track}
           />
         )}
         {current && isPro && (

@@ -12,6 +12,7 @@ import {
   CratesResponseSchema,
   type CreateCrateRequestSchema,
   type CreateNoteRequestSchema,
+  DailyResponseSchema,
   DeletedResponseSchema,
   type ErrorCode,
   HistoryResponseSchema,
@@ -183,7 +184,7 @@ export function createApiClient(options: ApiClientOptions) {
       return request(SharedCrateSchema, "GET", `/shared/${encodeURIComponent(shareId)}`);
     },
     daily(page = 0) {
-      return request(SequenceResponseSchema, "GET", `/daily?page=${page}`);
+      return request(DailyResponseSchema, "GET", `/daily?page=${page}`);
     },
     notes(videoId: string) {
       return request(NotesResponseSchema, "GET", `/notes${encodeQuery([["videoId", videoId]])}`);

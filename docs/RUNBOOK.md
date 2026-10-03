@@ -51,3 +51,34 @@ The ingest drafts a data entry each month. Review and publish it:
 pnpm worker changelog:list
 pnpm worker changelog:publish <id>
 ```
+
+## Billing (Pro)
+
+Stripe (web):
+
+1. Create a product "Pro" with a monthly and a yearly recurring price. Set `STRIPE_SECRET_KEY`,
+   `STRIPE_PRICE_MONTH` and `STRIPE_PRICE_YEAR` on the web app.
+2. Add a webhook endpoint `https://<domain>/api/v1/webhooks/stripe` for
+   `checkout.session.completed` and `customer.subscription.created|updated|deleted`. Set its
+   signing secret as `STRIPE_WEBHOOK_SECRET`.
+3. Turn on the Customer Portal (cancel, update payment method, switch monthly/yearly).
+
+RevenueCat (stores): one entitlement named `pro`. The app calls `Purchases.logIn(<Supabase user
+id>)`. Add the webhook `https://<domain>/api/v1/webhooks/revenuecat` with an Authorization header
+value; set the same value as `REVENUECAT_WEBHOOK_SECRET`.
+
+Give someone Pro by hand (support, testing):
+
+```sql
+insert into subscriptions (user_id, plan, source, expires_at) values ('<uuid>', 'pro', null, '2027-01-01')
+on conflict (user_id) do update set plan = 'pro', expires_at = excluded.expires_at;
+```
+
+## Tempo and key data
+
+```bash
+pnpm worker job enrich_tempo        # needs FEATURE_GETSONGBPM=1 and GETSONGBPM_API_KEY (Gate 3)
+pnpm worker job pick_audio_features # community votes → estimates → record_videos
+pnpm worker tempo:coverage --out reports/tempo-coverage.json
+pnpm worker acousticbrainz:import mapping.csv   # see docs/spikes/acousticbrainz.md
+```

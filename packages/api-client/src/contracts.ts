@@ -46,6 +46,8 @@ export const TempoSchema = z.object({
 export const ShufflePickSchema = z.object({
   recordKey: RecordKeySchema,
   videoId: VideoIdSchema,
+  /** The pressing the link came from; tempo and key votes are per (release, track). */
+  releaseId: z.number().int(),
   track: TrackRefSchema.nullable(),
   record: z.object({
     title: z.string(),
@@ -234,11 +236,18 @@ export const ReorderCrateItemsRequestSchema = z.object({
 });
 
 export const SequenceResponseSchema = z.object({
-  items: z.array(ItemRefSchema),
+  items: z.array(CatalogItemSchema),
   page: z.number().int(),
   hasMore: z.boolean(),
+  seed: z.number().int(),
 });
 export type SequenceResponse = z.infer<typeof SequenceResponseSchema>;
+
+export const DailyResponseSchema = SequenceResponseSchema.extend({
+  date: z.string(),
+  preset: z.object({ name: z.string(), blurb: z.string() }),
+});
+export type DailyResponse = z.infer<typeof DailyResponseSchema>;
 
 export const ShareResponseSchema = z.object({ shareId: z.string(), url: z.string() });
 

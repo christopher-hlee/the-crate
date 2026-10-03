@@ -4,6 +4,7 @@ import { ApiError, createApiClient, encodeQuery } from "./client";
 const pick = {
   recordKey: "m:7001",
   videoId: "GlassHarb01",
+  releaseId: 101,
   track: { position: "A1", title: "Glass Harbour" },
   record: {
     title: "Glass Harbour",
