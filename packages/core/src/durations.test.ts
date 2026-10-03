@@ -10,7 +10,21 @@ describe("parseDiscogsDuration", () => {
   });
 
   it("rejects empty or malformed values", () => {
-    for (const v of [null, undefined, "", "4.45", "abc", "4:", ":45", "1:2:3:4"]) {
+    expect(parseDiscogsDuration("123:45")).toBe(7425);
+    for (const v of [
+      null,
+      undefined,
+      "",
+      "4.45",
+      "abc",
+      "4:",
+      ":45",
+      "1:2:3:4",
+      "1234:00",
+      "1:234",
+      "1::2",
+      "4:45a",
+    ]) {
       expect(parseDiscogsDuration(v)).toBeNull();
     }
   });

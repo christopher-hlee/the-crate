@@ -1,0 +1,19 @@
+{
+  "name": "@app/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cli": "node --max-old-space-size=8192 --import tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app/core": "workspace:*",
+    "@app/discogs": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
+  }
+}

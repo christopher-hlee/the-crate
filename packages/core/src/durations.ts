@@ -3,12 +3,29 @@
 /** Parses a Discogs track duration. Returns null for empty or malformed values. */
 export function parseDiscogsDuration(value: string | null | undefined): number | null {
   if (!value) return null;
+  // Hand-rolled: this runs for every track in the dump. Accepts d{1,3}(:d{1,2}){1,2}.
   const v = value.trim();
-  if (!/^\d{1,3}(?::\d{1,2}){1,2}$/.test(v)) return null;
-  const parts = v.split(":").map(Number);
   let total = 0;
-  for (const p of parts) total = total * 60 + p;
-  return total;
+  let field = 0;
+  let digits = 0;
+  let groups = 0;
+  for (let i = 0; i < v.length; i++) {
+    const c = v.charCodeAt(i);
+    if (c >= 48 && c <= 57) {
+      field = field * 10 + (c - 48);
+      digits++;
+      if (digits > (groups === 0 ? 3 : 2)) return null;
+    } else if (c === 58 && digits > 0 && groups < 2) {
+      total = total * 60 + field;
+      field = 0;
+      digits = 0;
+      groups++;
+    } else {
+      return null;
+    }
+  }
+  if (digits === 0 || groups === 0) return null;
+  return total * 60 + field;
 }
 
 const ISO = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
