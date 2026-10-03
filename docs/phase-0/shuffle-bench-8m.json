@@ -1,0 +1,241 @@
+{
+  "rows": 8000000,
+  "playableShare": 0.85,
+  "postgres": "PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+  "iterations": 500,
+  "context": "Signed-in user with 1,000 history rows, 20 session record keys and viewer country US; signed-out runs send 20 session keys and 100 seen IDs instead.",
+  "scenarios": [
+    {
+      "name": "no filter",
+      "filters": {},
+      "matches": 6799131,
+      "pick": {
+        "n": 500,
+        "p50": 1.03,
+        "p95": 1.55,
+        "p99": 2.46,
+        "max": 6.77,
+        "mean": 1.12
+      },
+      "pickSignedOut": {
+        "n": 500,
+        "p50": 1.03,
+        "p95": 1.51,
+        "p99": 2.29,
+        "max": 5.26,
+        "mean": 1.09
+      },
+      "wrapArounds": 0,
+      "count": {
+        "n": 50,
+        "p50": 135.22,
+        "p95": 156.61,
+        "p99": 224.33,
+        "max": 224.33,
+        "mean": 140.3
+      },
+      "candidateList": null,
+      "seededFirst500": {
+        "n": 5,
+        "p50": 1574.91,
+        "p95": 1885.71,
+        "p99": 1885.71,
+        "max": 1885.71,
+        "mean": 1639.33
+      },
+      "plan": "Limit (actual time=0.138..0.139 rows=1 loops=1)\n  Buffers: shared hit=1 read=9 dirtied=1\n  ->  Nested Loop Anti Join (actual time=0.137..0.138 rows=1 loops=1)\n        Buffers: shared hit=1 read=9 dirtied=1\n        ->  Nested Loop Anti Join (actual time=0.081..0.081 rows=1 loops=1)\n              Buffers: shared hit=1 read=7 dirtied=1\n              ->  Index Scan using record_videos_shuffle on record_videos rv (actual time=0.049..0.049 rows=1 loops=1)\n                    Index Cond: (rand_key >= 1073741823)\n                    Filter: (record_key <> ALL ('{r:55049,m:31885,r:55053,r:55053,m:31887,m:31887,m:31888,m:31888,m:31889,m:31889,m:31889,m:31890,m:31890,m:31890,m:31890,r:55063,r:55064,r:55064,r:55064,r:55064}'::text[]))\n                    Buffers: shared read=4\n              ->  Index Scan using yt_videos_pkey on yt_videos yr (actual time=0.029..0.029 rows=0 loops=1)\n                    Index Cond: (video_id = rv.video_id)\n                    Filter: (('US'::text = ANY (region_blocked)) OR ((region_allowed IS NOT NULL) AND ('US'::text <> ALL (region_allowed))))\n                    Rows Removed by Filter: 1\n                    Buffers: shared hit=1 read=3 dirtied=1\n        ->  Index Only Scan using history_user_video on history h (actual time=0.054..0.055 rows=0 loops=1)\n              Index Cond: ((user_id = '00000000-0000-4000-8000-00000000bead'::uuid) AND (video_id = rv.video_id))\n              Heap Fetches: 0\n              Buffers: shared read=2\nPlanning:\n  Buffers: shared hit=19 read=6\nPlanning Time: 0.604 ms\nExecution Time: 0.176 ms"
+    },
+    {
+      "name": "one style (House)",
+      "filters": {
+        "styles": ["House"]
+      },
+      "matches": 258011,
+      "pick": {
+        "n": 500,
+        "p50": 1.09,
+        "p95": 1.87,
+        "p99": 2.61,
+        "max": 15.19,
+        "mean": 1.2
+      },
+      "pickSignedOut": {
+        "n": 500,
+        "p50": 1.05,
+        "p95": 1.68,
+        "p99": 4.63,
+        "max": 13.67,
+        "mean": 1.19
+      },
+      "wrapArounds": 0,
+      "count": {
+        "n": 50,
+        "p50": 253.97,
+        "p95": 330.89,
+        "p99": 356.99,
+        "max": 356.99,
+        "mean": 261.23
+      },
+      "candidateList": null,
+      "seededFirst500": {
+        "n": 5,
+        "p50": 1237.8,
+        "p95": 1301.48,
+        "p99": 1301.48,
+        "max": 1301.48,
+        "mean": 1239.52
+      },
+      "plan": "Limit (actual time=1.111..1.113 rows=1 loops=1)\n  Buffers: shared hit=2 read=124\n  ->  Nested Loop Anti Join (actual time=1.109..1.110 rows=1 loops=1)\n        Buffers: shared hit=2 read=124\n        ->  Nested Loop Anti Join (actual time=1.035..1.036 rows=1 loops=1)\n              Buffers: shared hit=2 read=122\n              ->  Index Scan using record_videos_shuffle on record_videos rv (actual time=0.993..0.994 rows=1 loops=1)\n                    Index Cond: (rand_key >= 1073741823)\n                    Filter: ((styles && '{House}'::text[]) AND (record_key <> ALL ('{r:55049,m:31885,r:55053,r:55053,m:31887,m:31887,m:31888,m:31888,m:31889,m:31889,m:31889,m:31890,m:31890,m:31890,m:31890,r:55063,r:55064,r:55064,r:55064,r:55064}'::text[])))\n                    Rows Removed by Filter: 116\n                    Buffers: shared read=120\n              ->  Index Scan using yt_videos_pkey on yt_videos yr (actual time=0.035..0.035 rows=0 loops=1)\n                    Index Cond: (video_id = rv.video_id)\n                    Filter: (('US'::text = ANY (region_blocked)) OR ((region_allowed IS NOT NULL) AND ('US'::text <> ALL (region_allowed))))\n                    Rows Removed by Filter: 1\n                    Buffers: shared hit=2 read=2\n        ->  Index Only Scan using history_user_video on history h (actual time=0.069..0.070 rows=0 loops=1)\n              Index Cond: ((user_id = '00000000-0000-4000-8000-00000000bead'::uuid) AND (video_id = rv.video_id))\n              Heap Fetches: 0\n              Buffers: shared read=2\nPlanning:\n  Buffers: shared hit=17 read=9\nPlanning Time: 0.617 ms\nExecution Time: 1.177 ms"
+    },
+    {
+      "name": "style + decade (Deep House, 1990s)",
+      "filters": {
+        "styles": ["Deep House"],
+        "yearFrom": 1990,
+        "yearTo": 1999
+      },
+      "matches": 49572,
+      "pick": {
+        "n": 500,
+        "p50": 1.73,
+        "p95": 4.09,
+        "p99": 6.09,
+        "max": 8.5,
+        "mean": 2.03
+      },
+      "pickSignedOut": {
+        "n": 500,
+        "p50": 1.67,
+        "p95": 3.79,
+        "p99": 6.07,
+        "max": 7.29,
+        "mean": 1.93
+      },
+      "wrapArounds": 0,
+      "count": {
+        "n": 50,
+        "p50": 413.77,
+        "p95": 472.39,
+        "p99": 483.23,
+        "max": 483.23,
+        "mean": 417.52
+      },
+      "candidateList": null,
+      "seededFirst500": {
+        "n": 5,
+        "p50": 1294.13,
+        "p95": 1328.52,
+        "p99": 1328.52,
+        "max": 1328.52,
+        "mean": 1283.94
+      },
+      "plan": "Limit (actual time=0.615..0.617 rows=1 loops=1)\n  Buffers: shared hit=5 read=84\n  ->  Nested Loop Anti Join (actual time=0.614..0.615 rows=1 loops=1)\n        Buffers: shared hit=5 read=84\n        ->  Nested Loop Anti Join (actual time=0.595..0.596 rows=1 loops=1)\n              Buffers: shared hit=5 read=82\n              ->  Index Scan using record_videos_shuffle on record_videos rv (actual time=0.555..0.555 rows=1 loops=1)\n                    Index Cond: (rand_key >= 1073741823)\n                    Filter: ((styles && '{\"Deep House\"}'::text[]) AND (year >= 1990) AND (year <= 1999) AND (record_key <> ALL ('{r:55049,m:31885,r:55053,r:55053,m:31887,m:31887,m:31888,m:31888,m:31889,m:31889,m:31889,m:31890,m:31890,m:31890,m:31890,r:55063,r:55064,r:55064,r:55064,r:55064}'::text[])))\n                    Rows Removed by Filter: 79\n                    Buffers: shared hit=4 read=79\n              ->  Index Scan using yt_videos_pkey on yt_videos yr (actual time=0.035..0.035 rows=0 loops=1)\n                    Index Cond: (video_id = rv.video_id)\n                    Filter: (('US'::text = ANY (region_blocked)) OR ((region_allowed IS NOT NULL) AND ('US'::text <> ALL (region_allowed))))\n                    Rows Removed by Filter: 1\n                    Buffers: shared hit=1 read=3\n        ->  Index Only Scan using history_user_video on history h (actual time=0.017..0.017 rows=0 loops=1)\n              Index Cond: ((user_id = '00000000-0000-4000-8000-00000000bead'::uuid) AND (video_id = rv.video_id))\n              Heap Fetches: 0\n              Buffers: shared read=2\nPlanning:\n  Buffers: shared hit=11 read=20\nPlanning Time: 0.647 ms\nExecution Time: 0.661 ms"
+    },
+    {
+      "name": "narrow (Boogaloo, US, 1965\u20131975, Vinyl)",
+      "filters": {
+        "styles": ["Boogaloo"],
+        "countries": ["US"],
+        "yearFrom": 1965,
+        "yearTo": 1975,
+        "formats": ["Vinyl"]
+      },
+      "matches": 1107,
+      "pick": {
+        "n": 500,
+        "p50": 30.35,
+        "p95": 140.93,
+        "p99": 183.22,
+        "max": 219.42,
+        "mean": 44.1
+      },
+      "pickSignedOut": {
+        "n": 500,
+        "p50": 27.35,
+        "p95": 143.08,
+        "p99": 187.78,
+        "max": 232.67,
+        "mean": 44.09
+      },
+      "wrapArounds": 1,
+      "count": {
+        "n": 50,
+        "p50": 183.58,
+        "p95": 196.74,
+        "p99": 216.45,
+        "max": 216.45,
+        "mean": 183.33
+      },
+      "candidateList": {
+        "n": 20,
+        "p50": 188.31,
+        "p95": 229.14,
+        "p99": 229.14,
+        "max": 229.14,
+        "mean": 192.03
+      },
+      "seededFirst500": {
+        "n": 5,
+        "p50": 222.71,
+        "p95": 273.23,
+        "p99": 273.23,
+        "max": 273.23,
+        "mean": 237.46
+      },
+      "plan": "Limit (actual time=5.655..5.657 rows=1 loops=1)\n  Buffers: shared hit=35 read=811\n  ->  Nested Loop Anti Join (actual time=5.654..5.655 rows=1 loops=1)\n        Join Filter: (h.video_id = rv.video_id)\n        Rows Removed by Join Filter: 1000\n        Buffers: shared hit=35 read=811\n        ->  Nested Loop Anti Join (actual time=5.148..5.149 rows=1 loops=1)\n              Buffers: shared hit=35 read=801\n              ->  Index Scan using record_videos_shuffle on record_videos rv (actual time=5.105..5.106 rows=1 loops=1)\n                    Index Cond: (rand_key >= 1073741823)\n                    Filter: ((country = ANY ('{US}'::text[])) AND (styles && '{Boogaloo}'::text[]) AND (year >= 1965) AND (year <= 1975) AND (format_names && '{Vinyl}'::text[]) AND (record_key <> ALL ('{r:55049,m:31885,r:55053,r:55053,m:31887,m:31887,m:31888,m:31888,m:31889,m:31889,m:31889,m:31890,m:31890,m:31890,m:31890,r:55063,r:55064,r:55064,r:55064,r:55064}'::text[])))\n                    Rows Removed by Filter: 826\n                    Buffers: shared hit=34 read=798\n              ->  Index Scan using yt_videos_pkey on yt_videos yr (actual time=0.037..0.037 rows=0 loops=1)\n                    Index Cond: (video_id = rv.video_id)\n                    Filter: (('US'::text = ANY (region_blocked)) OR ((region_allowed IS NOT NULL) AND ('US'::text <> ALL (region_allowed))))\n                    Rows Removed by Filter: 1\n                    Buffers: shared hit=1 read=3\n        ->  Materialize (actual time=0.019..0.420 rows=1000 loops=1)\n              Buffers: shared read=10\n              ->  Seq Scan on history h (actual time=0.015..0.192 rows=1000 loops=1)\n                    Filter: (user_id = '00000000-0000-4000-8000-00000000bead'::uuid)\n                    Buffers: shared read=10\nPlanning:\n  Buffers: shared hit=11 read=15\nPlanning Time: 0.670 ms\nExecution Time: 5.707 ms"
+    },
+    {
+      "name": "near-empty (Boogaloo, Japan, 1970\u20131975, Cassette)",
+      "filters": {
+        "styles": ["Boogaloo"],
+        "countries": ["Japan"],
+        "yearFrom": 1970,
+        "yearTo": 1975,
+        "formats": ["Cassette"]
+      },
+      "matches": 24,
+      "pick": {
+        "n": 500,
+        "p50": 139.73,
+        "p95": 174.01,
+        "p99": 204.22,
+        "max": 230.83,
+        "mean": 143.28
+      },
+      "pickSignedOut": {
+        "n": 500,
+        "p50": 138.31,
+        "p95": 174.25,
+        "p99": 197.59,
+        "max": 232.57,
+        "mean": 141.49
+      },
+      "wrapArounds": 19,
+      "count": {
+        "n": 50,
+        "p50": 145.75,
+        "p95": 188.19,
+        "p99": 191.96,
+        "max": 191.96,
+        "mean": 148.42
+      },
+      "candidateList": {
+        "n": 20,
+        "p50": 140.27,
+        "p95": 158.88,
+        "p99": 158.88,
+        "max": 158.88,
+        "mean": 140.98
+      },
+      "seededFirst500": {
+        "n": 5,
+        "p50": 136.26,
+        "p95": 151.63,
+        "p99": 151.63,
+        "max": 151.63,
+        "mean": 136.86
+      },
+      "plan": "Limit (actual time=128.484..128.489 rows=1 loops=1)\n  Buffers: shared hit=7484\n  ->  Sort (actual time=128.483..128.486 rows=1 loops=1)\n        Sort Key: rv.rand_key\n        Sort Method: top-N heapsort  Memory: 25kB\n        Buffers: shared hit=7484\n        ->  Nested Loop Anti Join (actual time=116.161..128.457 rows=11 loops=1)\n              Buffers: shared hit=7484\n              ->  Nested Loop Anti Join (actual time=116.138..128.325 rows=11 loops=1)\n                    Buffers: shared hit=7440\n                    ->  Bitmap Heap Scan on record_videos rv (actual time=116.105..128.180 rows=11 loops=1)\n                          Recheck Cond: ((styles && '{Boogaloo}'::text[]) AND (country = ANY ('{Japan}'::text[])) AND (year >= 1970) AND (year <= 1975))\n                          Rows Removed by Index Recheck: 12718\n                          Filter: (playable AND (format_names && '{Cassette}'::text[]) AND (rand_key >= 1073741823) AND (record_key <> ALL ('{r:55049,m:31885,r:55053,r:55053,m:31887,m:31887,m:31888,m:31888,m:31889,m:31889,m:31889,m:31890,m:31890,m:31890,m:31890,r:55063,r:55064,r:55064,r:55064,r:55064}'::text[])))\n                          Rows Removed by Filter: 294\n                          Heap Blocks: exact=6446\n                          Buffers: shared hit=7418\n                          ->  BitmapAnd (actual time=111.253..111.256 rows=0 loops=1)\n                                Buffers: shared hit=972\n                                ->  Bitmap Index Scan on record_videos_styles (actual time=8.177..8.177 rows=62173 loops=1)\n                                      Index Cond: (styles && '{Boogaloo}'::text[])\n                                      Buffers: shared hit=17\n                                ->  Bitmap Index Scan on record_videos_country (actual time=41.467..41.467 rows=480798 loops=1)\n                                      Index Cond: (country = ANY ('{Japan}'::text[]))\n                                      Buffers: shared hit=408\n                                ->  Bitmap Index Scan on record_videos_year (actual time=57.409..57.409 rows=645449 loops=1)\n                                      Index Cond: ((year >= 1970) AND (year <= 1975))\n                                      Buffers: shared hit=547\n                    ->  Index Only Scan using history_user_video on history h (actual time=0.007..0.007 rows=0 loops=11)\n                          Index Cond: ((user_id = '00000000-0000-4000-8000-00000000bead'::uuid) AND (video_id = rv.video_id))\n                          Heap Fetches: 0\n                          Buffers: shared hit=22\n              ->  Index Scan using yt_videos_pkey on yt_videos yr (actual time=0.010..0.010 rows=0 loops=11)\n                    Index Cond: (video_id = rv.video_id)\n                    Filter: (('US'::text = ANY (region_blocked)) OR ((region_allowed IS NOT NULL) AND ('US'::text <> ALL (region_allowed))))\n                    Rows Removed by Filter: 1\n                    Buffers: shared hit=44\nPlanning:\n  Buffers: shared hit=26\nPlanning Time: 0.584 ms\nExecution Time: 128.607 ms"
+    }
+  ]
+}

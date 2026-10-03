@@ -32,25 +32,27 @@ ID. Video never passes through our servers.
 
 ## Phase 0: prove the catalog
 
-- [ ] Scaffold: pnpm workspaces, Turborepo, TypeScript 6 strict, Biome, Vitest, `pnpm verify`, CI.
-- [ ] `CLAUDE.md`, `.claude/rules/compliance.md`, `docs/{SPEC,DECISIONS,RUNBOOK}.md`, `docker-compose.yml`.
-- [ ] `packages/core` (test-first): text normalization, YouTube ID extraction, record keys and
+- [x] Scaffold: pnpm workspaces, Turborepo, TypeScript 6 strict, Biome, Vitest, `pnpm verify`, CI.
+- [x] `CLAUDE.md`, `.claude/rules/compliance.md`, `docs/{SPEC,DECISIONS,RUNBOOK}.md`, `docker-compose.yml`.
+- [x] `packages/core` (test-first): text normalization, YouTube ID extraction, record keys and
       Discogs URLs, Discogs and ISO 8601 durations, artist display names, year parsing.
-- [ ] `packages/discogs`: dump discovery (HTML or S3 listing), CHECKSUM parsing, streaming
+- [x] `packages/discogs`: dump discovery (HTML or S3 listing), CHECKSUM parsing, streaming
       release parser (every element optional, sub-tracks flattened), per-release video links.
       Hand-written fixtures under `fixtures/discogs/`.
-- [ ] `apps/worker` CLI `catalog:count <url|file>`: streams gzip or plain XML, hashes it,
+- [x] `apps/worker` CLI `catalog:count <url|file>`: streams gzip or plain XML, hashes it,
       writes the JSON report (releases, linked releases, unique IDs, `embed="false"` share,
       counts by genre, style and decade, run time).
-- [ ] Synthetic dump generator for scale tests, since the live dump host is blocked here.
-- [ ] `packages/db`: Drizzle schema for every table in the data model, first migration,
+- [x] Synthetic dump generator for scale tests, since the live dump host is blocked here.
+- [x] `packages/db`: Drizzle schema for every table in the data model, first migration,
       typed filter → SQL builders for the unseeded pick, count and seeded order.
-- [ ] `bench:shuffle`: loads N synthetic `record_videos` rows and records p50/p95 for no
+- [x] `bench:shuffle`: loads N synthetic `record_videos` rows and records p50/p95 for no
       filter, one style, style plus decade, and a narrow combination.
-- [ ] `yt:sample`: validates a random sample of IDs (default 5,000) to estimate the playable share.
-- [ ] `docs/phase-0-report.md` with the numbers, the quota arithmetic and the open items.
+- [x] `yt:sample`: validates a random sample of IDs (default 5,000) to estimate the playable share.
+- [x] `docs/phase-0-report.md` with the numbers, the quota arithmetic and the open items.
 
 Gate 1 (provisional): Free filters are genre, style, year, country and format, as in the spec.
+Owed by the owner: the live `catalog:count` run, `yt:sample` with the API key, and `db:check`
+on Supabase (see `docs/phase-0-report.md`).
 
 ## Phase 1: web app, Free tier
 
