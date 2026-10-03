@@ -43,7 +43,8 @@ export default defineConfig({
   ],
   webServer: {
     command: `pnpm exec next start -p ${PORT}`,
-    url: `http://localhost:${PORT}/api/v1/styles`,
+    // A static page: the database is seeded by globalSetup, which runs after the server starts.
+    url: `http://localhost:${PORT}/legal/terms`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: { DATABASE_URL: E2E_DB, AUTH_MODE: "dev", NARROW_FILTER_THRESHOLD: "100" },
