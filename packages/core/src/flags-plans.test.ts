@@ -58,3 +58,38 @@ describe("player errors", () => {
     for (const code of [0, 1, 153, 3]) expect(isReportablePlayerError(code)).toBe(false);
   });
 });
+
+import { mergeSubscription } from "./plans";
+
+describe("mergeSubscription", () => {
+  const now = new Date("2026-10-03T00:00:00Z");
+  const later = new Date("2026-11-03T00:00:00Z");
+  const muchLater = new Date("2027-10-03T00:00:00Z");
+
+  it("takes events from the same source as they come", () => {
+    const cur = { plan: "pro" as const, source: "stripe" as const, expiresAt: later };
+    expect(
+      mergeSubscription(cur, { plan: "free", source: "stripe", expiresAt: now }, now).plan,
+    ).toBe("free");
+  });
+
+  it("never lets one source end an active Pro from another", () => {
+    const store = { plan: "pro" as const, source: "app_store" as const, expiresAt: muchLater };
+    const stripeCancel = { plan: "free" as const, source: "stripe" as const, expiresAt: now };
+    expect(mergeSubscription(store, stripeCancel, now)).toBe(store);
+    const stripeShorter = { plan: "pro" as const, source: "stripe" as const, expiresAt: later };
+    expect(mergeSubscription(store, stripeShorter, now)).toBe(store);
+    const stripeLonger = { plan: "pro" as const, source: "stripe" as const, expiresAt: null };
+    expect(mergeSubscription(store, stripeLonger, now)).toBe(stripeLonger);
+  });
+
+  it("replaces an expired subscription from any source", () => {
+    const old = {
+      plan: "pro" as const,
+      source: "play_store" as const,
+      expiresAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const fresh = { plan: "pro" as const, source: "stripe" as const, expiresAt: later };
+    expect(mergeSubscription(old, fresh, now)).toBe(fresh);
+  });
+});

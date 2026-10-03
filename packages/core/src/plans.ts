@@ -69,3 +69,32 @@ export function effectivePlan(
   if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) return "free";
   return "pro";
 }
+
+export type BillingSource = "stripe" | "app_store" | "play_store";
+export type SubscriptionState = {
+  plan: Plan;
+  source: BillingSource | null;
+  expiresAt: Date | null;
+};
+
+/**
+ * Merges a billing event into the stored subscription. One `pro` entitlement is shared by the
+ * web (Stripe) and the stores (RevenueCat): an event from one source never cuts short an
+ * active Pro from another source that runs longer.
+ */
+export function mergeSubscription(
+  current: SubscriptionState | null,
+  incoming: SubscriptionState,
+  now: Date,
+): SubscriptionState {
+  if (!current || current.source === incoming.source || current.source === null) return incoming;
+  const currentActive =
+    effectivePlan({ plan: current.plan, expiresAt: current.expiresAt }, now) === "pro";
+  if (!currentActive) return incoming;
+  const incomingActive =
+    effectivePlan({ plan: incoming.plan, expiresAt: incoming.expiresAt }, now) === "pro";
+  if (!incomingActive) return current;
+  // Both active: keep whichever runs longer (no expiry means it renews indefinitely).
+  const end = (s: SubscriptionState) => s.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY;
+  return end(incoming) >= end(current) ? incoming : current;
+}
