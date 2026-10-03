@@ -48,3 +48,32 @@ behind it, so `catalog:count` could not stream the newest dump from here. The co
 built and tested on fixtures, and the shuffle benchmarks ran on a generated catalog sized
 from published Discogs totals. Running `catalog:count` on the live dump is listed as an
 owner action in `docs/phase-0-report.md`.
+
+## 8. Bookkeeping tables and columns beyond the data model
+
+The spec's tables are all present as written. These additions carry state the spec
+describes but gives no table for:
+
+- `yt_quota_usage`: units spent per Pacific-time day, shared by every job that calls the
+  Data API, plus an `exhausted` flag set on `quotaExceeded`.
+- `video_reports`: player error reports. The web app writes them and the worker folds them
+  into `yt_videos.error_reports` and rechecks, so the web app still writes user-facing
+  tables only and never YouTube state.
+- `account_deletions`: deletions whose external steps (Supabase auth user, billing) need a
+  retry. User rows are deleted at request time; this row holds only the user ID until the
+  retry succeeds.
+- `rate_limits` and `pick_cache`: fixed-window counters and the narrow-filter and seeded
+  caches, kept in Postgres so there is still no Redis.
+- `record_videos.artist_ids` (GIN-indexed) for the Pro artist scope, `record_videos.tempo_source`
+  for `ShufflePick.tempo.source`, and a `record_videos_label` index for the label scope.
+- `subscriptions.stripe_customer_id` and `stripe_subscription_id`, `link_suggestions.reason`
+  and `checked_at`, `crates.updated_at`, `ingest_runs.error`, `changelog_entries.created_at`.
+
+## 9. Staging tables are derived from the live tables
+
+`stg_releases` and `stg_record_videos` are created with `LIKE` from the live tables, and their
+indexes are recreated from `pg_get_indexdef` after the bulk load. The Drizzle schema and its
+migrations stay the single source of truth, a catalog migration flows into the next build
+automatically, and the swap renames tables, constraints and indexes so live names never
+drift. A rollback with `ingest:rollback` is only valid when no catalog migration ran since
+the swap.
