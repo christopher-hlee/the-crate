@@ -96,7 +96,10 @@ test("first pick is cued, not autoplayed; a click plays; out of view never autop
   await page.setViewportSize({ width: 1280, height: 500 });
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   // Wait until the player itself knows it is under half visible.
-  await expect(page.locator("[data-player-box]")).toHaveAttribute("data-visible", /^0\.([0-4]\d|50)$/);
+  await expect(page.locator("[data-player-box]")).toHaveAttribute(
+    "data-visible",
+    /^0\.([0-4]\d|50)$/,
+  );
   await page.keyboard.press("n");
   await expect.poll(async () => (await ytCalls(page)).at(-1)?.fn).toBe("cueVideoById");
 });
