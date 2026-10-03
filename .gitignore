@@ -18,3 +18,4 @@ playwright-report/
 web-build/
 ios/
 android/
+next-env.d.ts

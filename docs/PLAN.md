@@ -68,20 +68,20 @@ on Supabase (see `docs/phase-0-report.md`).
       classification into statuses, quotaExceeded handling, recorded responses for tests.
 - [x] Jobs on pg-boss (singleton, rerunnable): `ingest`, `validate`, `recheck_reported`,
       `purge_yt_data`, `validate_link_suggestions`, `refresh_census`, `retry_account_deletions`.
-- [ ] API: shuffle (narrow-filter cache, region, session, seen, history exclusions), records,
+- [x] API: shuffle (narrow-filter cache, region, session, seen, history exclusions), records,
       styles, filters/count, plays, history, crates (+ items), changelog, me (GET, DELETE),
       video reports, link suggestions. Errors as `{error: {code, message}}`.
-- [ ] Auth: Supabase cookies on web and Bearer tokens for mobile; a dev-only auth mode for
+- [x] Auth: Supabase cookies on web and Bearer tokens for mobile; a dev-only auth mode for
       local work and end-to-end tests that refuses to run in production.
-- [ ] Rate limits in Postgres per IP or user, numbers in config. Sentry when a DSN is set.
-- [ ] Dig screen: one compliant IFrame player, Shuffle, filter drawer (census counts, often
+- [x] Rate limits in Postgres per IP or user, numbers in config. Sentry when a DSN is set.
+- [x] Dig screen: one compliant IFrame player, Shuffle, filter drawer (census counts, often
       tagged with, year histogram, country and format), record panel with generated sleeve,
       Discogs link and YouTube attribution, save to crate, shortcuts N, S, E and /.
-- [ ] Crates (3 × 50 on Free), History (50), Changelog, Account (plan, deletion), Legal pages.
-- [ ] Compliance tests in CI: one iframe, nothing on top, no inert or pointer-events none,
+- [x] Crates (3 × 50 on Free), History (50), Changelog, Account (plan, deletion), Legal pages.
+- [x] Compliance tests in CI: one iframe, nothing on top, no inert or pointer-events none,
       ≥200×200 at 320 px wide, no `AIza` in bundles, no downloader in the lockfile, purge test,
       mobile `baseUrl`.
-- [ ] Playwright end to end: shuffle, play with a stubbed IFrame API, save to crate.
+- [x] Playwright end to end: shuffle, play with a stubbed IFrame API, save to crate.
 
 Gate 2 (needs the owner): production ingest, a full validation pass, the rules review and
 YouTube's API Compliance Audit.

@@ -11,8 +11,8 @@ import {
   buildSeededQuery,
   CopyWriter,
   type Exclusions,
-  runMigrations,
 } from "@app/db";
+import { runMigrations } from "@app/db/migrate";
 import pg from "pg";
 import {
   COUNTRY_WEIGHTS,

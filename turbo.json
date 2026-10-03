@@ -10,7 +10,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "generated/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "generated/**"],
+      "env": ["NEXT_PUBLIC_*", "SUPABASE_URL", "SUPABASE_ANON_KEY", "AUTH_MODE"]
     },
     "typecheck": {
       "dependsOn": ["^build"]

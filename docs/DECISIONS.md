@@ -98,3 +98,31 @@ The web app writes `video_reports` and `link_suggestions` rows; the worker's
 `recheck_reported` and `validate_link_suggestions` jobs pick them up every 10 minutes. The web
 app never needs a pg-boss connection, and a reported video is rechecked at most once an hour
 however often it is reported.
+
+## 13. A dev-only sign-in for local work and end-to-end tests
+
+`AUTH_MODE=dev` signs a browser in as a made-up user through `/api/dev/session` (or a
+`Bearer dev:<uuid>` token), so the app and its Playwright suite run without a Supabase project.
+The web app refuses to start in this mode on Vercel (`VERCEL` set), and the route returns 404 in
+every other mode. Production uses Supabase sessions: cookies on the web, Bearer tokens on mobile,
+verified with `auth.getClaims()`.
+
+## 14. Screens with a player use no overlays at all
+
+Rule 3 forbids drawing over the player and making it or its ancestors `inert` or
+`pointer-events: none`. Modal dialogs and floating menus (including Radix's) do both while open,
+so screens with a player have none: the save-to-crate picker, notes and filters expand inline
+in the page flow, notices render below the controls, and the header is not sticky. The
+compliance specs check this after interactions, not only on load.
+
+## 15. ShufflePick carries `thumbnailUrl`
+
+The spec's `ShufflePick` gains a nullable `thumbnailUrl` from `yt_videos` (YouTube API data,
+refreshed within 30 days) so clients can preload the next pick's thumbnail as player rule 7
+describes. Saved-record lists show generated sleeves instead of thumbnails.
+
+## 16. The bundle scan flags `AIza` followed by 30 or more key characters
+
+Google API keys are `AIza` plus 35 characters. The compliance scan fails on `AIza` plus 30 or
+more, so a truncated or mangled key fails too, without matching the bare four letters that can
+occur inside unrelated base64.

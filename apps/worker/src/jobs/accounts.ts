@@ -2,22 +2,7 @@
 // retries the external steps (deleting the Supabase auth user) and re-deletes any user rows
 // that arrived in the meantime. Everything completes well inside the 7-day promise.
 
-import type { Queryable } from "@app/db";
-
-export const USER_TABLES = [
-  "history",
-  "crates",
-  "notes",
-  "tempo_votes",
-  "link_suggestions",
-  "subscriptions",
-] as const;
-
-/** Deletes every row a user owns. crate_items go with crates (on delete cascade). */
-export async function deleteUserRows(db: Queryable, userId: string): Promise<void> {
-  for (const t of USER_TABLES) await db.query(`delete from ${t} where user_id = $1`, [userId]);
-  await db.query("update video_reports set user_id = null where user_id = $1", [userId]);
-}
+import { deleteUserRows, type Queryable } from "@app/db";
 
 export type AuthAdmin = { deleteUser(userId: string): Promise<void> };
 

@@ -10,7 +10,7 @@ export const DEFAULT_APP_ID = "com.example.cratedig";
 export const RAND_KEY_MAX = 2 ** 31 - 1;
 
 /** Below this many matches, the shuffle picks from a cached ID list (see phase-0-report). */
-export const DEFAULT_NARROW_FILTER_THRESHOLD = 2000;
+export const DEFAULT_NARROW_FILTER_THRESHOLD = 5000;
 
 /** Filter-count queries stop at this many rows and show "10,000+". */
 export const MATCH_COUNT_CAP = 10_000;
