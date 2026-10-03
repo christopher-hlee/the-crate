@@ -7,6 +7,7 @@ import type { WorkerEnv } from "../env";
 import { refreshLatestCensus } from "../ingest/census";
 import { runIngest } from "../ingest/run";
 import { r2Store } from "../ingest/snapshot";
+import { runEnrichTempo, runPickAudioFeatures } from "../tempo/jobs";
 import { runRetryAccountDeletions, supabaseAuthAdmin } from "./accounts";
 import { runPurge } from "./purge";
 import { runValidateSuggestions } from "./suggestions";
@@ -110,6 +111,29 @@ export const JOBS: JobDefinition[] = [
     data: Empty,
     async run(ctx) {
       return { dumpDate: await refreshLatestCensus(ctx.pool) };
+    },
+  },
+  {
+    name: "enrich_tempo",
+    cron: "*/5 * * * *",
+    expireInSeconds: 280,
+    data: Empty,
+    async run(ctx) {
+      // ~200 requests per 5-minute run, capped at 2,500 an hour by the shared counter.
+      return runEnrichTempo(ctx.pool, {
+        enabled: ctx.env.flags.FEATURE_GETSONGBPM,
+        apiKey: ctx.env.GETSONGBPM_API_KEY,
+        maxRequests: 200,
+      });
+    },
+  },
+  {
+    name: "pick_audio_features",
+    cron: "20 * * * *",
+    expireInSeconds: 3000,
+    data: Empty,
+    async run(ctx) {
+      return runPickAudioFeatures(ctx.pool);
     },
   },
   {

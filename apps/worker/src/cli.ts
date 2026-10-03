@@ -14,6 +14,8 @@ import { runIngest } from "./ingest/run";
 import { JOBS, jobByName } from "./jobs/registry";
 import { syncPlayable } from "./jobs/youtube-state";
 import { startWorker } from "./main";
+import { importAcousticBrainz } from "./tempo/acousticbrainz";
+import { tempoCoverage } from "./tempo/jobs";
 
 /** pnpm runs scripts from the package folder; resolve paths against where the user ran it. */
 function userPath(p: string): string {
@@ -103,6 +105,31 @@ const commands: Record<string, Command> = {
           client.release();
         }
         console.error("Rolled back to the previous catalog.");
+        return 0;
+      });
+    },
+  },
+  "tempo:coverage": {
+    usage:
+      "tempo:coverage [--out reports/tempo-coverage.json]   (share of playable records with a tempo, per style)",
+    async run(args) {
+      const { values } = parseArgs({ args, options: { out: { type: "string" } } });
+      return withPool(async (pool) => {
+        const report = { at: new Date().toISOString(), ...(await tempoCoverage(pool)) };
+        if (values.out) await writeReport(userPath(values.out), report);
+        printJson({ overall: report.overall, topStyles: report.byStyle.slice(0, 20) });
+        return 0;
+      });
+    },
+  },
+  "acousticbrainz:import": {
+    usage:
+      "acousticbrainz:import <mapping.csv>   (discogs_release_id,track_position,bpm,key,scale)",
+    async run(args) {
+      const file = args[0];
+      if (!file) throw new Error("acousticbrainz:import needs a CSV file");
+      return withPool(async (pool) => {
+        printJson(await importAcousticBrainz(pool, userPath(file)));
         return 0;
       });
     },
