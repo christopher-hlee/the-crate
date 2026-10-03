@@ -1,0 +1,111 @@
+{
+  "requested": [
+    "GlassHarb01",
+    "NightFerry1",
+    "LowTideDub9",
+    "CalleOcho_1",
+    "NeonRain_77",
+    "LastTrain_1",
+    "CratesDJh01"
+  ],
+  "status": 200,
+  "body": {
+    "items": [
+      {
+        "id": "GlassHarb01",
+        "snippet": {
+          "title": "Marlo Venn - Glass Harbour",
+          "thumbnails": {
+            "default": {
+              "url": "https://i.ytimg.com/vi/GlassHarb01/default.jpg",
+              "width": 120,
+              "height": 90
+            },
+            "medium": {
+              "url": "https://i.ytimg.com/vi/GlassHarb01/mqdefault.jpg",
+              "width": 320,
+              "height": 180
+            }
+          }
+        },
+        "contentDetails": {
+          "duration": "PT6M12S",
+          "regionRestriction": { "blocked": ["DE", "AT"] }
+        },
+        "status": {
+          "uploadStatus": "processed",
+          "privacyStatus": "public",
+          "embeddable": true,
+          "madeForKids": false
+        },
+        "statistics": { "viewCount": "48213" }
+      },
+      {
+        "id": "NightFerry1",
+        "snippet": {
+          "title": "Night Ferry",
+          "thumbnails": {
+            "default": {
+              "url": "https://i.ytimg.com/vi/NightFerry1/default.jpg",
+              "width": 120,
+              "height": 90
+            }
+          }
+        },
+        "contentDetails": {
+          "duration": "PT7M3S",
+          "regionRestriction": { "allowed": ["US", "CA", "gb"] }
+        },
+        "status": {
+          "uploadStatus": "processed",
+          "privacyStatus": "unlisted",
+          "embeddable": true,
+          "madeForKids": false
+        },
+        "statistics": { "viewCount": "912" }
+      },
+      {
+        "id": "LowTideDub9",
+        "snippet": { "title": "Low Tide" },
+        "contentDetails": { "duration": "PT5M40S" },
+        "status": {
+          "uploadStatus": "processed",
+          "privacyStatus": "public",
+          "embeddable": false,
+          "madeForKids": false
+        },
+        "statistics": { "viewCount": "77" }
+      },
+      {
+        "id": "CalleOcho_1",
+        "snippet": { "title": "Calle Ocho Shuffle (for kids)" },
+        "contentDetails": { "duration": "PT2M51S" },
+        "status": {
+          "uploadStatus": "processed",
+          "privacyStatus": "public",
+          "embeddable": true,
+          "madeForKids": true
+        },
+        "statistics": { "viewCount": "1000" }
+      },
+      {
+        "id": "NeonRain_77",
+        "snippet": { "title": "Neon Rain" },
+        "contentDetails": { "duration": "PT4M10S" },
+        "status": {
+          "uploadStatus": "rejected",
+          "privacyStatus": "public",
+          "embeddable": true,
+          "madeForKids": false
+        }
+      },
+      {
+        "id": "LastTrain_1",
+        "snippet": { "title": "Last Train" },
+        "contentDetails": { "duration": "PT3M30S" },
+        "status": { "uploadStatus": "processed", "privacyStatus": "public", "embeddable": true },
+        "statistics": {}
+      }
+    ]
+  }
+}

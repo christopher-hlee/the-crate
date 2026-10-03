@@ -1,0 +1,154 @@
+{
+  "about": "Hand-labeled (video title → track position) cases for tuning track matching. Invented titles. expected maps videoId to the matching position, or null for no match.",
+  "cases": [
+    {
+      "name": "artist - title",
+      "artist": "Marlo Venn",
+      "tracks": [["A1", "Glass Harbour"], ["A2", "Low Tide (Dub)"], ["B1", "Night Ferry"]],
+      "videos": [
+        ["v1", "Marlo Venn - Night Ferry"],
+        ["v2", "Marlo Venn – Glass Harbour (Original Mix)"]
+      ],
+      "expected": { "v1": "B1", "v2": "A1" }
+    },
+    {
+      "name": "dub version named loosely",
+      "artist": "Marlo Venn",
+      "tracks": [["A1", "Glass Harbour"], ["A2", "Low Tide (Dub)"]],
+      "videos": [["v1", "M Venn - Low Tide Dub [1994]"]],
+      "expected": { "v1": "A2" }
+    },
+    {
+      "name": "position in the title",
+      "artist": "Various",
+      "tracks": [["A1", "Crates"], ["A2", "Dust"], ["B1", "Static"]],
+      "videos": [["v1", "B1 - Static (Basement Cuts Vol. 2)"], ["v2", "A2. Dust"]],
+      "expected": { "v1": "B1", "v2": "A2" }
+    },
+    {
+      "name": "full album upload",
+      "artist": "Hollow Bells",
+      "tracks": [["A1", "Fade"], ["A2", "Glow"], ["B1", "Nothing Linked"]],
+      "videos": [
+        ["v1", "Hollow Bells - Nothing Linked (Full Album)"],
+        ["v2", "Hollow Bells - Glow"]
+      ],
+      "expected": { "v1": null, "v2": "A2" }
+    },
+    {
+      "name": "accents and case",
+      "artist": "Kōji Haruna",
+      "tracks": [["A1", "Östermalm"], ["A2", "Söder"]],
+      "videos": [["v1", "KOJI HARUNA - OSTERMALM"]],
+      "expected": { "v1": "A1" }
+    },
+    {
+      "name": "non-latin titles",
+      "artist": "Kōji Haruna",
+      "tracks": [["A1", "東京の夜"], ["A2", "雨の街"]],
+      "videos": [["v1", "Kōji Haruna 東京の夜 1982"]],
+      "expected": { "v1": "A1" }
+    },
+    {
+      "name": "artist only, no track named",
+      "artist": "Ana Solis",
+      "tracks": [["A", "Calle Ocho Shuffle"], ["B", "Engine Room"]],
+      "videos": [["v1", "Ana Solis live in Miami 1972"]],
+      "expected": { "v1": null }
+    },
+    {
+      "name": "longer title wins a containment tie",
+      "artist": "The Starlings",
+      "tracks": [["A1", "Love"], ["A2", "Love Me Slow"]],
+      "videos": [["v1", "The Starlings - Love Me Slow"], ["v2", "Starlings - Love (1966)"]],
+      "expected": { "v1": "A2", "v2": "A1" }
+    },
+    {
+      "name": "remix vs original",
+      "artist": "Tidewater",
+      "tracks": [["A", "Signal (Original)"], ["B", "Signal (Remix By Cobalt)"]],
+      "videos": [["v1", "Tidewater - Signal (Cobalt Remix)"], ["v2", "Tidewater - Signal"]],
+      "expected": { "v1": "B", "v2": "A" }
+    },
+    {
+      "name": "featuring credits",
+      "artist": "Dex Orbit",
+      "tracks": [["1", "Satellite Hearts"], ["2", "Cobalt Line"]],
+      "videos": [["v1", "Dex Orbit feat. Mira Lane - Satellite Hearts (Official Video)"]],
+      "expected": { "v1": "1" }
+    },
+    {
+      "name": "single positioned track takes the only link",
+      "artist": "Neon Rain",
+      "tracks": [["", "Side One"], ["A", "Pulse"]],
+      "videos": [["v1", "NEON RAIN 12\" promo"]],
+      "expected": { "v1": "A" }
+    },
+    {
+      "name": "headings never match",
+      "artist": "Velvet Echo",
+      "tracks": [["", "Garden Suite"], ["A1", "Morning"], ["A2", "Evening"]],
+      "videos": [["v1", "Velvet Echo - Garden Suite"]],
+      "expected": { "v1": null }
+    },
+    {
+      "name": "track artist on a compilation",
+      "artist": "Various",
+      "tracks": [["A1", "Copper", ["DJ Halfstep"]], ["A2", "Copper Rain", ["Lo-Fi"]]],
+      "videos": [["v1", "Lo-Fi - Copper Rain"], ["v2", "DJ Halfstep - Copper"]],
+      "expected": { "v1": "A2", "v2": "A1" }
+    },
+    {
+      "name": "one shared word is not enough",
+      "artist": "Summer Station",
+      "tracks": [["A1", "Midnight Island Machine"], ["A2", "Honey"]],
+      "videos": [["v1", "Summer Station - Midnight Drive"]],
+      "expected": { "v1": null }
+    },
+    {
+      "name": "two of three words",
+      "artist": "Summer Station",
+      "tracks": [["A1", "Midnight Island Machine"], ["A2", "Honey"]],
+      "videos": [["v1", "Summer Station - Midnight Machine"]],
+      "expected": { "v1": "A1" }
+    },
+    {
+      "name": "same track linked twice",
+      "artist": "Orbit Garden",
+      "tracks": [["A", "Drift"], ["B", "Lantern"]],
+      "videos": [["v1", "Orbit Garden - Drift"], ["v2", "Orbit Garden - Drift (HQ)"]],
+      "expected": { "v1": "A", "v2": null }
+    },
+    {
+      "name": "part numbers",
+      "artist": "River Mirror",
+      "tracks": [["A", "Fever (Part 1)"], ["B", "Fever (Part 2)"]],
+      "videos": [["v1", "River Mirror - Fever Part 2"], ["v2", "River Mirror - Fever pt 1"]],
+      "expected": { "v1": "B", "v2": "A" }
+    },
+    {
+      "name": "apostrophes and ampersands",
+      "artist": "Static & Shadow",
+      "tracks": [["1", "Don't Stop The Pulse"], ["2", "Rock & Roll Satellite"]],
+      "videos": [
+        ["v1", "Static and Shadow - Dont Stop the Pulse"],
+        ["v2", "Static & Shadow — Rock and Roll Satellite"]
+      ],
+      "expected": { "v1": "1", "v2": "2" }
+    },
+    {
+      "name": "unrelated video on a multi-track release",
+      "artist": "Cobalt Tide",
+      "tracks": [["A1", "Velvet"], ["A2", "Mirror"], ["B1", "Shadow"]],
+      "videos": [["v1", "Cobalt Tide interview 2009"]],
+      "expected": { "v1": null }
+    },
+    {
+      "name": "numbered CD positions",
+      "artist": "Echo Lantern",
+      "tracks": [["1", "Orbit"], ["2", "Signal Fever"], ["3", "Copper"]],
+      "videos": [["v1", "Echo Lantern - 2 - Signal Fever"], ["v2", "Echo Lantern Copper"]],
+      "expected": { "v1": "2", "v2": "3" }
+    }
+  ]
+}
