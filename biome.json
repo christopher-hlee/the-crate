@@ -51,5 +51,40 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/core/src/**", "!packages/core/src/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["node:*"],
+                    "message": "packages/core is pure: no Node imports."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react-dom",
+                      "react-native",
+                      "react-native-*",
+                      "expo",
+                      "expo-*",
+                      "next",
+                      "next/*"
+                    ],
+                    "message": "packages/core is pure: no React, React Native or Next imports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

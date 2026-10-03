@@ -7,7 +7,7 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "verify": "biome ci . && turbo run typecheck test build && pnpm compliance",
+    "verify": "biome ci --error-on-warnings . && turbo run typecheck test build && pnpm compliance",
     "lint": "biome check .",
     "fix": "biome check --write .",
     "typecheck": "turbo run typecheck",
