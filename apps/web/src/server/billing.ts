@@ -25,6 +25,9 @@ export async function applySubscription(
     expires_at: Date | null;
   }>("select plan, source, expires_at from subscriptions where user_id = $1", [userId]);
   const row = res.rows[0];
+  // An ending subscription for a user with no row (never subscribed here, or an account that was
+  // deleted, whose cancellation webhook arrives afterwards) must not recreate their data.
+  if (!row && incoming.plan === "free") return;
   const current = row ? { plan: row.plan, source: row.source, expiresAt: row.expires_at } : null;
   const next = mergeSubscription(current, incoming, new Date());
   await db.query(

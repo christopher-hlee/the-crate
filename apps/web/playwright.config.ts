@@ -55,6 +55,7 @@ export default defineConfig({
     env: {
       DATABASE_URL: E2E_DB,
       AUTH_MODE: "dev",
+      ALLOW_DEV_AUTH: "1",
       NARROW_FILTER_THRESHOLD: "100",
       FEATURE_CLEARED_LANE: "1",
       ASSET_STORE_DIR: ASSET_DIR,

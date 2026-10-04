@@ -144,4 +144,16 @@ describe("applySubscription", () => {
     });
     expect((await planFor(t.pool, USER)).plan).toBe("free");
   });
+
+  it("never recreates data for a deleted account from a late cancellation webhook", async () => {
+    const gone = "77777777-7777-4777-8777-777777777777";
+    await applySubscription(
+      t.pool,
+      gone,
+      { plan: "free", source: "stripe", expiresAt: new Date() },
+      { customer: "cus_gone" },
+    );
+    const rows = await t.pool.query("select 1 from subscriptions where user_id = $1", [gone]);
+    expect(rows.rowCount).toBe(0);
+  });
 });

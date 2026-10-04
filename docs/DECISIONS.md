@@ -261,3 +261,12 @@ foreground service), so only builds made with `FEATURE_CLEARED_LANE` get it, thr
 configurations. The YouTube WebView still pauses on any app-state change away from `active`.
 Offline listening keeps the MP3 preview in the app's documents folder; Pro WAV export goes to the
 share sheet ("Save to Files").
+
+## 34. Dev auth needs an explicit opt-in in production; account deletion cancels Stripe
+
+Supersedes part of 13. A production server (`NODE_ENV=production`) never falls back to dev auth:
+without Supabase settings it refuses to start, and `AUTH_MODE=dev` also needs `ALLOW_DEV_AUTH=1`,
+which only the end-to-end tests set. Vercel refuses dev auth outright. Deleting an account now
+cancels its Stripe subscription first (the deletion stops if Stripe can't be reached), and a
+late cancellation webhook for a user with no subscription row is ignored instead of recreating
+data for a deleted account. Store subscriptions still have to be cancelled in the store.

@@ -34,15 +34,38 @@ const Schema = z.object({
 
 export type WebEnv = ReturnType<typeof readEnv>;
 
+/**
+ * Dev auth trusts a cookie, so it must never run on a deployment. Locally it is the default
+ * without Supabase. A production server needs Supabase, or both AUTH_MODE=dev and
+ * ALLOW_DEV_AUTH=1 (the end-to-end tests run a production build), and never on Vercel.
+ */
+export function resolveAuthMode(o: {
+  authMode: "supabase" | "dev" | undefined;
+  supabaseUrl: string | undefined;
+  vercel: boolean;
+  production: boolean;
+  allowDevAuth: boolean;
+}): "supabase" | "dev" {
+  const mode = o.authMode ?? (o.supabaseUrl || o.production ? "supabase" : "dev");
+  if (mode === "dev" && o.vercel) throw new Error("AUTH_MODE=dev is refused on Vercel deployments");
+  if (mode === "dev" && o.production && !o.allowDevAuth)
+    throw new Error("AUTH_MODE=dev is refused in production unless ALLOW_DEV_AUTH=1 (tests only)");
+  if (mode === "supabase" && o.production && !o.supabaseUrl)
+    throw new Error("Set SUPABASE_URL and SUPABASE_ANON_KEY: production needs real sign-in");
+  return mode;
+}
+
 function readEnv() {
   const e = Schema.parse(process.env);
   const supabaseUrl = e.NEXT_PUBLIC_SUPABASE_URL ?? e.SUPABASE_URL;
   const anonKey = e.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? e.SUPABASE_ANON_KEY;
-  const authMode = e.AUTH_MODE ?? (supabaseUrl ? "supabase" : "dev");
-  if (authMode === "dev" && e.VERCEL) {
-    // Dev auth trusts a cookie; it must never run on a deployment.
-    throw new Error("AUTH_MODE=dev is refused on Vercel deployments");
-  }
+  const authMode = resolveAuthMode({
+    authMode: e.AUTH_MODE,
+    supabaseUrl,
+    vercel: Boolean(e.VERCEL),
+    production: process.env.NODE_ENV === "production",
+    allowDevAuth: process.env.ALLOW_DEV_AUTH === "1",
+  });
   return {
     ...e,
     supabaseUrl,
