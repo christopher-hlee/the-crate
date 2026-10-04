@@ -24,6 +24,12 @@ const Schema = z.object({
   REVENUECAT_WEBHOOK_SECRET: optional,
   SENTRY_DSN: optional,
   VERCEL: optional,
+  // Archive (cleared-lane) files: R2 in production, a local folder in development and tests.
+  R2_ACCOUNT_ID: optional,
+  R2_ACCESS_KEY_ID: optional,
+  R2_SECRET_ACCESS_KEY: optional,
+  R2_BUCKET: optional,
+  ASSET_STORE_DIR: optional,
 });
 
 export type WebEnv = ReturnType<typeof readEnv>;

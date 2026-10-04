@@ -2,11 +2,14 @@
 // against these; the web and mobile clients validate responses.
 
 import {
+  DATE_EVIDENCE_KINDS,
   FiltersSchema,
   isRecordKey,
   isVideoId,
+  MAX_CHOPS,
   PLANS,
   REPORTABLE_PLAYER_ERRORS,
+  RIGHTS_BASES,
   SHUFFLE_EXCLUDE_MAX,
 } from "@app/core";
 import { z } from "zod";
@@ -350,3 +353,80 @@ export const CheckoutRequestSchema = z.object({
   interval: z.enum(["month", "year"]).default("month"),
 });
 export const RedirectResponseSchema = z.object({ url: z.string() });
+
+// ---------------------------------------------------------------------------- archive (Phase 4, flagged)
+// Public-domain and Creative Commons recordings we host ourselves (the "cleared lane" in the
+// spec; the product never calls it "cleared" until the rights rules pass legal review).
+
+export const AssetRightsSchema = z.object({
+  basis: z.enum(RIGHTS_BASES),
+  basisLabel: z.string(),
+  sourceUrl: z.string(),
+  licenseUrl: z.string().nullable(),
+  recordingYear: z.number().int().nullable(),
+  dateEvidence: z.array(
+    z.object({
+      kind: z.enum(DATE_EVIDENCE_KINDS),
+      citation: z.string(),
+      url: z.string().nullable(),
+    }),
+  ),
+  attribution: z.string().nullable(),
+  checkedAt: Iso,
+});
+
+export const AssetSchema = z.object({
+  id: UuidSchema,
+  artist: z.string(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+  label: z.string().nullable(),
+  catno: z.string().nullable(),
+  styles: z.array(z.string()),
+  durationS: z.number().nullable(),
+  bpm: z.number().nullable(),
+  camelotKey: z.string().nullable(),
+  /** Streaming preview and waveform peaks: short-lived URLs, fetch them soon. */
+  previewUrl: z.string(),
+  previewType: z.string(),
+  peaksUrl: z.string(),
+  rights: AssetRightsSchema,
+});
+export type Asset = z.infer<typeof AssetSchema>;
+
+export const AssetListResponseSchema = z.object({
+  assets: z.array(AssetSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const ChopsSchema = z.object({
+  markers: z.array(z.number().min(0).max(86_400)).max(MAX_CHOPS),
+});
+
+export const SidecarSchema = z.object({
+  file: z.string(),
+  artist: z.string(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+  bpm: z.number().nullable(),
+  camelotKey: z.string().nullable(),
+  chop: z
+    .object({ index: z.number().int(), startSeconds: z.number(), endSeconds: z.number() })
+    .nullable(),
+  rights: z.record(z.string(), z.unknown()),
+  exportedBy: z.string(),
+  exportedAt: Iso,
+});
+
+/** Pro: the WAV master (short-lived URL), its DAW file name, and the rights sidecar. */
+export const AssetDownloadResponseSchema = z.object({
+  wavUrl: z.string(),
+  fileStem: z.string(),
+  sidecar: SidecarSchema,
+});
+export type AssetDownload = z.infer<typeof AssetDownloadResponseSchema>;
+
+export const CrateAssetsResponseSchema = z.object({
+  assets: z.array(AssetSchema.extend({ position: z.number().int(), addedAt: Iso })),
+});
+export const CrateAssetRequestSchema = z.object({ assetId: UuidSchema });

@@ -26,6 +26,7 @@ packages/discogs  Dump discovery, checksum, streaming release parser, link extra
 packages/youtube  videos.list client, quota accounting, status classification
 packages/api-client  zod contracts and the typed client shared by web and mobile
 packages/player-html The WebView player page and its typed message protocol
+packages/assets   Archive (cleared-lane) file store: R2 with presigned URLs, or a local folder
 fixtures/         Hand-written Discogs XML and recorded YouTube responses (never copied)
 ```
 

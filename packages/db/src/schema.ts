@@ -379,3 +379,103 @@ export const pickCache = pgTable(
   },
   (t) => [index("pick_cache_expiry").on(t.expiresAt)],
 );
+
+// ---------------------------------------------------------------------------------------
+// Cleared lane (Phase 4, behind FEATURE_CLEARED_LANE): audio we host ourselves, each asset
+// with a rights record (rule 20). The worker writes assets and rights; the web app writes
+// the user tables (asset_chops, crate_assets).
+
+export type AssetStatus = "pending" | "processing" | "ready" | "held" | "rejected" | "withdrawn";
+
+export const assets = pgTable(
+  "assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Stable key from the import manifest, so re-imports update rather than duplicate. */
+    slug: text("slug").notNull().unique(),
+    artist: text("artist").notNull(),
+    title: text("title").notNull(),
+    year: smallint("year"),
+    label: text("label"),
+    catno: text("catno"),
+    styles: text("styles").array().notNull().default(sql`'{}'::text[]`),
+    status: text("status").$type<AssetStatus>().notNull().default("pending"),
+    /** Why the asset isn't ready (rights problems, a failed transcode). */
+    statusReason: text("status_reason"),
+    durationS: real("duration_s"),
+    sampleRate: integer("sample_rate"),
+    channels: smallint("channels"),
+    bpm: real("bpm"),
+    camelotKey: text("camelot_key"),
+    /** Object keys in the asset store (R2): the WAV master, the streaming preview, peaks JSON. */
+    wavKey: text("wav_key"),
+    previewKey: text("preview_key"),
+    previewType: text("preview_type"),
+    peaksKey: text("peaks_key"),
+    sha256: text("sha256"),
+    createdAt: tstz("created_at").notNull().defaultNow(),
+    updatedAt: tstz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("assets_status").on(t.status, t.artist)],
+);
+
+export const assetRights = pgTable("asset_rights", {
+  assetId: uuid("asset_id")
+    .primaryKey()
+    .references(() => assets.id, { onDelete: "cascade" }),
+  basis: text("basis").$type<"us_pd" | "cc0" | "cc_by" | "cc_by_sa" | "signed_license">().notNull(),
+  sourceUrl: text("source_url").notNull(),
+  licenseUrl: text("license_url"),
+  recordingYear: smallint("recording_year"),
+  dateEvidence: jsonb("date_evidence")
+    .$type<{ kind: string; citation: string; url: string | null }[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  attribution: text("attribution"),
+  licenseRef: text("license_ref"),
+  licenseExpiresAt: date("license_expires_at", { mode: "string" }),
+  /** When the rules last passed (or failed) this record, and the PD cutoff they used. */
+  checkedAt: tstz("checked_at").notNull().defaultNow(),
+  rulesCutoffYear: smallint("rules_cutoff_year"),
+  problems: text("problems").array().notNull().default(sql`'{}'::text[]`),
+});
+
+/** One row: the US public-domain cutoff year in force, advanced by pd_rollover each January. */
+export const rightsRules = pgTable("rights_rules", {
+  id: smallint("id").primaryKey().default(1),
+  usPdCutoffYear: smallint("us_pd_cutoff_year"),
+  /** Off when the year is held back by hand (e.g. on legal advice); pd_rollover then leaves it. */
+  autoAdvance: boolean("auto_advance").notNull().default(true),
+  updatedAt: tstz("updated_at").notNull().defaultNow(),
+});
+
+export const assetChops = pgTable(
+  "asset_chops",
+  {
+    userId: uuid("user_id").notNull(),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    markers: real("markers").array().notNull().default(sql`'{}'::real[]`),
+    updatedAt: tstz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.assetId] })],
+);
+
+export const crateAssets = pgTable(
+  "crate_assets",
+  {
+    crateId: uuid("crate_id")
+      .notNull()
+      .references(() => crates.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    addedAt: tstz("added_at").notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.crateId, t.assetId] }),
+    index("crate_assets_order").on(t.crateId, t.position),
+  ],
+);

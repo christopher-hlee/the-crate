@@ -72,7 +72,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await t.pool.query(
-    "truncate yt_videos, record_videos, video_reports, yt_quota_usage, link_suggestions, account_deletions, history, crates, crate_items, notes, subscriptions",
+    "truncate yt_videos, record_videos, video_reports, yt_quota_usage, link_suggestions, account_deletions, history, crates, crate_items, crate_assets, asset_chops, notes, subscriptions",
   );
 });
 

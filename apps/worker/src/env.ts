@@ -25,6 +25,10 @@ export const WorkerEnvSchema = z.object({
   R2_ACCESS_KEY_ID: optional,
   R2_SECRET_ACCESS_KEY: optional,
   R2_BUCKET: optional,
+  /** Cleared-lane files on local disk when R2 isn't configured (development, tests). */
+  ASSET_STORE_DIR: optional,
+  FFMPEG_PATH: optional,
+  ESSENTIA_EXTRACTOR: optional,
   SUPABASE_URL: optional,
   SUPABASE_SERVICE_ROLE_KEY: optional,
   GETSONGBPM_API_KEY: optional,

@@ -23,7 +23,8 @@
     "@sentry/node": "11.4.0",
     "drizzle-orm": "0.45.3",
     "pg-copy-streams": "7.0.0",
-    "saxes": "6.0.0"
+    "saxes": "6.0.0",
+    "@app/assets": "workspace:*"
   },
   "devDependencies": {
     "tsx": "4.23.15",

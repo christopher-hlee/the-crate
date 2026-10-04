@@ -48,6 +48,11 @@ EXPO_PUBLIC_API_URL=http://<your-lan-ip>:3000 EXPO_PUBLIC_AUTH_MODE=dev \
   `packages/player-html` in a WebView whose `baseUrl` is the app ID; swipe for next,
   long-press to save, haptics, offline state, pause on background, RevenueCat purchases.
   Store copy and review notes are in [`docs/store-listing.md`](docs/store-listing.md).
+- **Archive (Phase 4, flagged and unlisted):** public-domain and Creative Commons recordings we
+  host ourselves, each with a rights record checked by rules in `packages/core`; a waveform
+  player with chop markers; Pro WAV export and DAW folder export (folder picker or ZIP, with
+  rights sidecars); the January 1 public-domain rollover. Off until the rights rules pass legal
+  review.
 
 See [`CLAUDE.md`](CLAUDE.md) for the layout and conventions and
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for operations.

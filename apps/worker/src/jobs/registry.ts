@@ -1,8 +1,10 @@
 // Every scheduled job: one instance at a time (pg-boss "stately" queues: at most one queued
 // and one active), each safe to rerun from the start.
 
+import { assetStoreFromEnv } from "@app/assets";
 import type { Pool } from "@app/db";
 import { z } from "zod";
+import { recheckRights, runPdRollover } from "../cleared/rules";
 import type { WorkerEnv } from "../env";
 import { refreshLatestCensus } from "../ingest/census";
 import { runIngest } from "../ingest/run";
@@ -150,7 +152,34 @@ export const JOBS: JobDefinition[] = [
       return runRetryAccountDeletions(ctx.pool, auth);
     },
   },
+  {
+    // January 1: a new year of US recordings enters the public domain.
+    name: "pd_rollover",
+    cron: "10 0 1 1 *",
+    expireInSeconds: 3600,
+    data: Empty,
+    async run(ctx) {
+      if (!ctx.env.flags.FEATURE_CLEARED_LANE) return { skipped: "FEATURE_CLEARED_LANE is off" };
+      return runPdRollover(ctx.pool, new Date());
+    },
+  },
+  {
+    // Daily: signed licences expire, and rules can change by hand.
+    name: "recheck_rights",
+    cron: "45 4 * * *",
+    expireInSeconds: 3600,
+    data: Empty,
+    async run(ctx) {
+      if (!ctx.env.flags.FEATURE_CLEARED_LANE) return { skipped: "FEATURE_CLEARED_LANE is off" };
+      return recheckRights(ctx.pool, new Date());
+    },
+  },
 ];
+
+/** The cleared-lane asset store from the environment (R2, or ASSET_STORE_DIR locally). */
+export function clearedStore(env: WorkerEnv) {
+  return assetStoreFromEnv(env);
+}
 
 export function jobByName(name: string): JobDefinition {
   const job = JOBS.find((j) => j.name === name);

@@ -5,8 +5,13 @@ import { type Filters, filtersToSearchParams } from "@app/core";
 import type { z } from "zod";
 import {
   ApiErrorBodySchema,
+  AssetDownloadResponseSchema,
+  AssetListResponseSchema,
+  AssetSchema,
   ChangelogResponseSchema,
+  ChopsSchema,
   CountResponseSchema,
+  CrateAssetsResponseSchema,
   CrateDetailSchema,
   CrateSchema,
   CratesResponseSchema,
@@ -222,6 +227,59 @@ export function createApiClient(options: ApiClientOptions) {
     },
     portal() {
       return request(RedirectResponseSchema, "POST", "/billing/portal");
+    },
+    assets(params: { q?: string; cursor?: string | null } = {}) {
+      const pairs: Pairs = [];
+      if (params.q) pairs.push(["q", params.q]);
+      if (params.cursor) pairs.push(["cursor", params.cursor]);
+      return request(AssetListResponseSchema, "GET", `/archive${encodeQuery(pairs)}`);
+    },
+    asset(id: string) {
+      return request(AssetSchema, "GET", `/archive/${encodeURIComponent(id)}`);
+    },
+    assetDownload(id: string, chop?: { index: number; startSeconds: number; endSeconds: number }) {
+      const pairs: Pairs = chop
+        ? [
+            ["chop", String(chop.index)],
+            ["start", String(chop.startSeconds)],
+            ["end", String(chop.endSeconds)],
+          ]
+        : [];
+      return request(
+        AssetDownloadResponseSchema,
+        "GET",
+        `/archive/${encodeURIComponent(id)}/download${encodeQuery(pairs)}`,
+      );
+    },
+    chops(id: string) {
+      return request(ChopsSchema, "GET", `/archive/${encodeURIComponent(id)}/chops`);
+    },
+    saveChops(id: string, markers: number[]) {
+      return request(ChopsSchema, "PUT", `/archive/${encodeURIComponent(id)}/chops`, { markers });
+    },
+    crateAssets(crateId: string) {
+      return request(
+        CrateAssetsResponseSchema,
+        "GET",
+        `/crates/${encodeURIComponent(crateId)}/assets`,
+      );
+    },
+    addCrateAsset(crateId: string, assetId: string) {
+      return request(
+        CrateAssetsResponseSchema,
+        "POST",
+        `/crates/${encodeURIComponent(crateId)}/assets`,
+        {
+          assetId,
+        },
+      );
+    },
+    removeCrateAsset(crateId: string, assetId: string) {
+      return request(
+        CrateAssetsResponseSchema,
+        "DELETE",
+        `/crates/${encodeURIComponent(crateId)}/assets${encodeQuery([["assetId", assetId]])}`,
+      );
     },
   };
 }

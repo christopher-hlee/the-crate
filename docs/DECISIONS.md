@@ -205,3 +205,59 @@ note that it is managed on the web.
 CI runs `expo export` for iOS and Android and scans the Hermes bundles for API keys. The Maestro
 flows in `apps/mobile/.maestro` need a simulator or device build (EAS), so they run against
 TestFlight and Play internal builds, which are owner actions at Gate 4.
+
+## 28. The cleared lane is called "Archive" in the product
+
+Rule 20 forbids marketing anything as "cleared" before the lawyer's review, so users see an
+unlisted "Archive (preview)" at `/archive` (no navigation link, `noindex`, 404 unless
+`FEATURE_CLEARED_LANE` is on). Code and docs keep the spec's name, "cleared lane".
+
+## 29. Rights rules as written in `packages/core/src/rights.ts`
+
+- **US public domain** follows 17 U.S.C. § 1401 as amended by the Music Modernization Act:
+  pre-1923 recordings from 2022, then 100 years after publication for 1923–1946 (so 1925 is the
+  newest public-domain year in 2026, matching the spec), 110 years for 1947–1956, everything
+  fixed before 15 February 1972 from 15 February 2067, and 95 years after that. A recording needs
+  its publication year and at least one piece of date evidence (discography, label dating, a dated
+  document or an archive catalogue entry).
+- **Creative Commons** passes only for CC0 1.0, CC BY and CC BY-SA (any version or port),
+  recognised from the licence URL, and BY and BY-SA need an attribution line. NC, ND and Sampling
+  licences never pass, whatever basis the record claims. The Public Domain Mark is a label, not a
+  licence, so it needs the US basis with date evidence.
+- **Signed licences** need a contract reference and an unexpired term.
+
+The stored year in `rights_rules` can be held back by hand (`auto_advance = false`) and is never
+allowed past the legal year. US public domain is a US rule; whether the archive is geo-limited is
+for the lawyer's review.
+
+## 30. Archive storage and previews
+
+Archive files live in R2 under `cleared/<asset id>/` (the dump bucket, as the spec's diagram
+shows): a 44.1 kHz 16-bit WAV master, a 192 kbps MP3 preview and waveform peaks. MP3 rather than
+AAC because every browser decodes it, including Chromium builds without proprietary codecs. The
+web app hands out presigned GET URLs (an hour); in development and tests a local folder
+(`ASSET_STORE_DIR`) is served by `/api/v1/archive/files/…` with byte ranges. Only assets with
+status `ready` are listed or served, and WAV masters only to Pro.
+
+## 31. Archive tables
+
+`assets`, `asset_rights` (one rights record per asset with the problems and the cutoff year of
+its last check), `rights_rules` (one row), `asset_chops` (per-user chop markers, deleted with the
+account) and `crate_assets` (archive recordings in crates, counted against the Free crate size).
+The web app writes only `asset_chops` and `crate_assets`.
+
+## 32. Chops and exports
+
+Chop markers are times in seconds, at most 64, kept per user. WAV export of a chop is cut in the
+browser (or on the phone) from the master with the shared WAV code in `packages/core`, so the
+server never transcodes on request. A single WAV export carries no sidecar; DAW folder exports
+(Chrome and Edge folder picker, a stored ZIP elsewhere) write one `.json` rights sidecar per WAV.
+
+## 33. Archive on mobile is a build option
+
+Background playback is an app-wide capability (iOS `UIBackgroundModes`, Android's media-playback
+foreground service), so only builds made with `FEATURE_CLEARED_LANE` get it, through the
+`expo-audio` config plugin; default builds have neither, and the compliance test checks both
+configurations. The YouTube WebView still pauses on any app-state change away from `active`.
+Offline listening keeps the MP3 preview in the app's documents folder; Pro WAV export goes to the
+share sheet ("Save to Files").

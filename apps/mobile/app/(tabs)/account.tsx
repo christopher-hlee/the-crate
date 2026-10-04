@@ -6,6 +6,7 @@ import { Alert, Platform, ScrollView, Text, View } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Notice, Section } from "../../src/components/ui";
+import { archiveEnabled } from "../../src/lib/archive";
 import { useAuth } from "../../src/lib/auth";
 import { config } from "../../src/lib/config";
 import { buy, configurePurchases, proPackages, restore } from "../../src/lib/purchases";
@@ -165,6 +166,13 @@ export default function AccountScreen() {
         </Section>
         <Section title="About">
           <Button variant="ghost" label="What's new" onPress={() => router.push("/changelog")} />
+          {archiveEnabled ? (
+            <Button
+              variant="ghost"
+              label="Archive (preview)"
+              onPress={() => router.push("/archive")}
+            />
+          ) : null}
           <Button variant="ghost" label="Terms of Use" onPress={() => openWeb("/legal/terms")} />
           <Button
             variant="ghost"

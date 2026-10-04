@@ -2,8 +2,13 @@ import type { NextConfig } from "next";
 
 const config: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@app/core", "@app/db", "@app/api-client"],
-  serverExternalPackages: ["pg", "pg-copy-streams"],
+  transpilePackages: ["@app/core", "@app/db", "@app/api-client", "@app/assets"],
+  serverExternalPackages: [
+    "pg",
+    "pg-copy-streams",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+  ],
   poweredByHeader: false,
   env: {
     // Public Supabase values; the spec names them without the NEXT_PUBLIC_ prefix.

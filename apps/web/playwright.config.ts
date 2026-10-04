@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 // End-to-end and compliance specs. The global setup seeds a fresh database through the
@@ -12,6 +14,9 @@ const E2E_DB = (() => {
   return u.toString();
 })();
 const executablePath = process.env.PW_CHROMIUM_PATH || undefined;
+// Archive (cleared-lane) files for the e2e run: written by globalSetup's import, served by the app.
+const ASSET_DIR = process.env.E2E_ASSET_DIR ?? join(tmpdir(), "crate-e2e-assets");
+process.env.E2E_ASSET_DIR = ASSET_DIR;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -47,6 +52,12 @@ export default defineConfig({
     url: `http://localhost:${PORT}/legal/terms`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { DATABASE_URL: E2E_DB, AUTH_MODE: "dev", NARROW_FILTER_THRESHOLD: "100" },
+    env: {
+      DATABASE_URL: E2E_DB,
+      AUTH_MODE: "dev",
+      NARROW_FILTER_THRESHOLD: "100",
+      FEATURE_CLEARED_LANE: "1",
+      ASSET_STORE_DIR: ASSET_DIR,
+    },
   },
 });

@@ -4,6 +4,7 @@ import { ApiError, type CrateDetail, type CrateItem } from "@app/api-client";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { CrateArchiveSection } from "@/components/CrateArchiveSection";
 import { CrateProTools } from "@/components/CrateProTools";
 import { ItemListPlayer } from "@/components/ItemListPlayer";
 import { SequenceList } from "@/components/SequenceList";
@@ -100,6 +101,7 @@ export default function CratePage() {
         )}
       </div>
       <CrateProTools crate={data.crate} onChange={(crate) => setData({ ...data, crate })} />
+      <CrateArchiveSection crateId={id} crateName={data.crate.name} />
       {data.crate.seed !== null && (
         // One player per screen: the seeded order and the saved records are tabs, never both.
         <div className="flex gap-2" role="tablist" aria-label="Crate view">

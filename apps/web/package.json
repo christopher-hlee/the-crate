@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@app/api-client": "workspace:*",
+    "@app/assets": "workspace:*",
     "@app/core": "workspace:*",
     "@app/db": "workspace:*",
     "@sentry/nextjs": "11.4.0",
@@ -26,9 +27,9 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "0.0.1",
+    "stripe": "23.0.0",
     "tailwind-merge": "3.7.0",
-    "zod": "4.6.5",
-    "stripe": "23.0.0"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

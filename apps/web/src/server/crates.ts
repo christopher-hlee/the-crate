@@ -48,7 +48,7 @@ export async function listCrates(db: Pool, userId: string): Promise<Crate[]> {
   return res.rows.map(toCrate);
 }
 
-async function ownCrate(db: Pool, userId: string, id: string): Promise<CrateRow> {
+export async function ownCrate(db: Pool, userId: string, id: string): Promise<CrateRow> {
   const res = await db.query<CrateRow>(
     `select ${CRATE_COLUMNS} from crates c where c.id = $1 and c.user_id = $2`,
     [id, userId],

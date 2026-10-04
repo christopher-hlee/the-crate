@@ -120,11 +120,15 @@ account, then App Review and Google Play review (checklist in `docs/store-listin
 
 ## Phase 4: cleared lane (behind `FEATURE_CLEARED_LANE`, unlisted)
 
-- [ ] Rights rules in `packages/core` (US ≤ 1925 recordings with date evidence, CC0, CC BY,
+- [x] Rights rules in `packages/core` (US ≤ 1925 recordings with date evidence, CC0, CC BY,
       CC BY-SA, signed licence; never NC or ND), rights records per asset.
-- [ ] Asset pipeline into R2: transcode, waveform peaks, tempo and key analysis hook.
-- [ ] Cleared player with waveform and chop markers, WAV export, DAW folder export
+- [x] Asset pipeline into R2: transcode, waveform peaks, tempo and key analysis hook
+      (`pnpm worker cleared:import`).
+- [x] Cleared player with waveform and chop markers, WAV export, DAW folder export
       (`showDirectoryPicker`, ZIP fallback, `Artist - Title [96 BPM 8A].wav` plus JSON sidecar).
-- [ ] `pd_rollover` job for January 1.
+      Mobile: background play and offline listening in archive builds, WAV to the share sheet.
+- [x] `pd_rollover` job for January 1, and a daily `recheck_rights`.
 
-Gate before launch (needs the owner): the lawyer's review of the rights rules.
+Gate before launch (needs the owner): the lawyer's review of the rights rules
+(`packages/core/src/rights.ts`, DECISIONS 29), the first curated manifest, R2 CORS for the web
+origin, and an archive build of the apps if the lane goes to mobile.

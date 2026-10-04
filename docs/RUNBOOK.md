@@ -82,3 +82,35 @@ pnpm worker job pick_audio_features # community votes → estimates → record_v
 pnpm worker tempo:coverage --out reports/tempo-coverage.json
 pnpm worker acousticbrainz:import mapping.csv   # see docs/spikes/acousticbrainz.md
 ```
+
+## Archive (cleared lane, Phase 4)
+
+Off by default (`FEATURE_CLEARED_LANE`), unlisted (`/archive`, no nav link, `noindex`), and not
+to be marketed as "cleared" until the owner's lawyer has reviewed the rights rules in
+`packages/core/src/rights.ts` (rule 20).
+
+**Import.** Assets are curated by hand into a manifest (`apps/worker/src/cleared/manifest.ts`
+has the schema): artist, title, the audio file (URL or a path next to the manifest), and a
+rights record with its basis, source, licence URL, recording year and date evidence.
+
+```bash
+pnpm worker cleared:import path/to/manifest.json      # --force re-uploads unchanged files
+```
+
+The import checks rights first and never fetches audio for a record that fails. A US recording
+newer than the public-domain year is processed but held. Passing ones are transcoded with
+ffmpeg to a 44.1 kHz 16-bit WAV master and a 192 kbps MP3 preview, get 2,000-bucket waveform
+peaks, optional Essentia tempo and key, and are uploaded to R2 under `cleared/<asset id>/`.
+Without ffmpeg only WAV sources import, and the master doubles as the preview.
+
+**Rules year.** `rights_rules.us_pd_cutoff_year` is set by the first import and advanced every
+January 1 by `pd_rollover`, which releases held recordings and drafts a changelog entry. To hold
+the year back on legal advice: `update rights_rules set us_pd_cutoff_year = <year>,
+auto_advance = false;` then `pnpm worker rights:recheck`. `recheck_rights` runs daily for
+expiring signed licences.
+
+**R2 CORS.** Browsers fetch WAV masters from presigned URLs to slice chops and build DAW folders,
+so the bucket needs a CORS rule allowing `GET` from the web app's origin.
+
+**Withdrawing a recording.** `update assets set status = 'withdrawn' where slug = '<slug>';`
+Listing and file serving stop at once; presigned URLs already handed out expire within an hour.

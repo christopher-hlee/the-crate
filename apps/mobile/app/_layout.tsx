@@ -24,6 +24,7 @@ export default function RootLayout() {
             <Stack.Screen name="crates/[id]" options={{ title: "Crate" }} />
             <Stack.Screen name="login" options={{ title: "Sign in", presentation: "card" }} />
             <Stack.Screen name="changelog" options={{ title: "What's new" }} />
+            <Stack.Screen name="archive" options={{ title: "Archive (preview)" }} />
             <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
           </Stack>
         </AuthProvider>

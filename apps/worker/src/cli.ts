@@ -1,9 +1,14 @@
 // Worker CLI. `pnpm worker <command> [options]`; `pnpm worker help` lists commands.
 
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { createPool, type Pool, rollbackCatalog } from "@app/db";
 import pg from "pg";
+import { ManifestSchema } from "./cleared/manifest";
+import { importManifest, manifestBaseDir } from "./cleared/pipeline";
+import { recheckRights, runPdRollover } from "./cleared/rules";
+import { resolveAudioTools } from "./cleared/tools";
 import { benchShuffle } from "./commands/bench-shuffle";
 import { countCatalog, writeReport } from "./commands/catalog-count";
 import { generateDump } from "./commands/dump-generate";
@@ -11,7 +16,7 @@ import { e2eSeed } from "./commands/e2e-seed";
 import { sampleIdsFromDump, validateSample } from "./commands/yt-sample";
 import { loadEnv, requireDatabaseUrl } from "./env";
 import { runIngest } from "./ingest/run";
-import { JOBS, jobByName } from "./jobs/registry";
+import { clearedStore, JOBS, jobByName } from "./jobs/registry";
 import { syncPlayable } from "./jobs/youtube-state";
 import { startWorker } from "./main";
 import { importAcousticBrainz } from "./tempo/acousticbrainz";
@@ -118,6 +123,59 @@ const commands: Record<string, Command> = {
         const report = { at: new Date().toISOString(), ...(await tempoCoverage(pool)) };
         if (values.out) await writeReport(userPath(values.out), report);
         printJson({ overall: report.overall, topStyles: report.byStyle.slice(0, 20) });
+        return 0;
+      });
+    },
+  },
+  "cleared:import": {
+    usage:
+      "cleared:import <manifest.json> [--force]   (cleared lane: check rights, transcode, peaks, upload)",
+    async run(args) {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { force: { type: "boolean" } },
+      });
+      const file = positionals[0];
+      if (!file) throw new Error("cleared:import needs a manifest file");
+      const env = loadEnv();
+      const store = clearedStore(env);
+      if (!store)
+        throw new Error("Set the R2_* variables or ASSET_STORE_DIR for cleared-lane files.");
+      const path = userPath(file);
+      const manifest = ManifestSchema.parse(JSON.parse(readFileSync(path, "utf8")));
+      const tools = await resolveAudioTools(env);
+      if (!tools.ffmpeg)
+        console.error("ffmpeg not found: only WAV sources can be imported, with WAV previews");
+      return withPool(async (pool) => {
+        const results = await importManifest(
+          { pool, store, tools, log: (m) => console.error(m) },
+          manifest,
+          { baseDir: manifestBaseDir(path), force: Boolean(values.force) },
+        );
+        printJson(results);
+        return results.some((r) => r.status === "pending") ? 1 : 0;
+      });
+    },
+  },
+  "rights:rollover": {
+    usage:
+      "rights:rollover [--now <ISO date>]   (advance the US public-domain year; what pd_rollover runs)",
+    async run(args) {
+      const { values } = parseArgs({ args, options: { now: { type: "string" } } });
+      const now = values.now ? new Date(values.now) : new Date();
+      if (Number.isNaN(now.getTime())) throw new Error("--now must be an ISO date");
+      return withPool(async (pool) => {
+        printJson(await runPdRollover(pool, now));
+        return 0;
+      });
+    },
+  },
+  "rights:recheck": {
+    usage: "rights:recheck   (re-apply the rights rules to every ready or held asset)",
+    async run() {
+      return withPool(async (pool) => {
+        printJson(await recheckRights(pool, new Date()));
         return 0;
       });
     },
