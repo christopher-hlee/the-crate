@@ -6,41 +6,60 @@ export type Plan = (typeof PLANS)[number];
 export type PlanLimits = {
   /** Plays kept in history. */
   historyWindow: number;
-  /** null means unlimited. */
+  /** Crates (playlists). 0 means the plan has none; null means unlimited. */
   maxCrates: number | null;
   maxItemsPerCrate: number | null;
+  /** Favorites and saved filter presets, for any signed-in user. */
+  maxFavorites: number;
+  maxSavedFilters: number;
+  /** Notes on records, favorites and crate items. */
   notes: boolean;
   crateExport: boolean;
   /** Create share links, seeded crates and the like. Everyone can play them. */
   createShared: boolean;
+  /** Keyword, topic-channel, "more from" and deep-cut filters (PRO_FILTER_KEYS). */
   proFilters: boolean;
   tempoVotes: boolean;
+  /** Open a favorites list or crate as a YouTube playlist. */
+  youtubePlaylist: boolean;
+  comments: boolean;
   clearedDownload: boolean;
   ads: boolean;
 };
 
+// Free and Pro mirror the market's split (DECISIONS 35): the digging filters, favorites, saved
+// filters and notes are free for anyone signed in; Pro sells organisation (crates), power
+// search, a long history, exports and no ads.
 export const PLAN_LIMITS: Readonly<Record<Plan, PlanLimits>> = {
   free: {
     historyWindow: 50,
-    maxCrates: 3,
-    maxItemsPerCrate: 50,
-    notes: false,
+    maxCrates: 0,
+    maxItemsPerCrate: 0,
+    maxFavorites: 10_000,
+    maxSavedFilters: 200,
+    notes: true,
     crateExport: false,
     createShared: false,
     proFilters: false,
-    tempoVotes: false,
+    tempoVotes: true,
+    youtubePlaylist: false,
+    comments: true,
     clearedDownload: false,
     ads: true,
   },
   pro: {
     historyWindow: 1000,
-    maxCrates: null,
-    maxItemsPerCrate: null,
+    maxCrates: 200,
+    maxItemsPerCrate: 1000,
+    maxFavorites: 10_000,
+    maxSavedFilters: 200,
     notes: true,
     crateExport: true,
     createShared: true,
     proFilters: true,
     tempoVotes: true,
+    youtubePlaylist: true,
+    comments: true,
     clearedDownload: true,
     ads: false,
   },

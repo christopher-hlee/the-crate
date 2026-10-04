@@ -1,6 +1,7 @@
 import { limitsFor } from "@app/core";
 import { deleteAccount } from "@/server/account";
 import { requireViewer } from "@/server/auth";
+import { profileOf, ranksFor } from "@/server/community";
 import { db } from "@/server/db";
 import { clientIp, json, route } from "@/server/http";
 import { planFor } from "@/server/plan";
@@ -8,8 +9,14 @@ import { rateLimit } from "@/server/rate-limit";
 
 export const GET = route(async (req) => {
   const viewer = await requireViewer(req);
-  const info = await planFor(db(), viewer.userId);
+  const pool = db();
+  const info = await planFor(pool, viewer.userId);
   const l = limitsFor(info.plan);
+  const [profile, ranks] = await Promise.all([
+    profileOf(pool, viewer.userId),
+    ranksFor(pool, [viewer.userId]),
+  ]);
+  const rank = ranks.get(viewer.userId) ?? { level: 1, title: "Newcomer", points: 0 };
   return json(
     {
       user: { id: viewer.userId, email: viewer.email },
@@ -20,12 +27,18 @@ export const GET = route(async (req) => {
         maxCrates: l.maxCrates,
         maxItemsPerCrate: l.maxItemsPerCrate,
         historyWindow: l.historyWindow,
+        maxFavorites: l.maxFavorites,
+        maxSavedFilters: l.maxSavedFilters,
         notes: l.notes,
         crateExport: l.crateExport,
         createShared: l.createShared,
         proFilters: l.proFilters,
         tempoVotes: l.tempoVotes,
+        youtubePlaylist: l.youtubePlaylist,
+        comments: l.comments,
       },
+      profile,
+      rank,
     },
     { headers: { "cache-control": "no-store" } },
   );

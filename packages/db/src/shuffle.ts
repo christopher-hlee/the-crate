@@ -5,6 +5,7 @@ import {
   bpmRanges,
   compatibleKeys,
   type Filters,
+  keywordTsQuery,
   MATCH_COUNT_CAP,
   normalizeFilters,
   SEEDED_PAGE_SIZE,
@@ -39,6 +40,28 @@ export function filterClauses(input: Filters, p: Params): string[] {
   if (f.deepCutMin !== undefined) out.push(`rv.deep_cut >= ${p.add(f.deepCutMin, "real")}`);
   if (f.labelIds) out.push(`rv.label_id = any(${p.add(f.labelIds, "bigint[]")})`);
   if (f.artistIds) out.push(`rv.artist_ids && ${p.add(f.artistIds, "bigint[]")}`);
+  if (f.recordKeys) out.push(`rv.record_key = any(${p.add(f.recordKeys, "text[]")})`);
+  const ts = keywordTsQuery(f.q);
+  if (ts) {
+    // Discogs names (catalog) or the video's own title and tags (YouTube data, kept 30 days).
+    // The expressions match the GIN indexes in migration 0003 exactly.
+    const q = p.add(ts, "text");
+    out.push(
+      `(record_search_doc(rv.title, rv.artist_display, rv.label_name, rv.track_title, rv.styles, rv.genres) @@ to_tsquery('simple', ${q})
+    or exists (select 1 from yt_videos yk where yk.video_id = rv.video_id and yk.title is not null
+                 and video_search_doc(yk.title, yk.tags) @@ to_tsquery('simple', ${q})))`,
+    );
+  }
+  if (f.topicOnly) {
+    out.push(
+      `exists (select 1 from yt_videos yt where yt.video_id = rv.video_id and yt.channel_title like '% - Topic')`,
+    );
+  }
+  if (f.channelIds) {
+    out.push(
+      `exists (select 1 from yt_videos yc where yc.video_id = rv.video_id and yc.channel_id = any(${p.add(f.channelIds, "text[]")}))`,
+    );
+  }
   if (f.maxViews !== undefined) {
     // YouTube's own count, used as a filter only; it never feeds a score (rule 7).
     out.push(

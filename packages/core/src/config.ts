@@ -53,6 +53,7 @@ export const RATE_LIMITS = {
   report: { limit: 20, windowSeconds: 60 * 10 },
   linkSuggestion: { limit: 20, windowSeconds: 60 * 60 },
   tempoVote: { limit: 120, windowSeconds: 60 * 60 },
+  comment: { limit: 10, windowSeconds: 60 * 10 },
 } as const;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

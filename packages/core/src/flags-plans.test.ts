@@ -23,19 +23,39 @@ describe("readFlags", () => {
 });
 
 describe("plan limits", () => {
-  it("caps Free at 3 crates of 50 records and 50 plays", () => {
-    expect(limitsFor("free").historyWindow).toBe(50);
-    expect(canCreateCrate("free", 2)).toBe(true);
-    expect(canCreateCrate("free", 3)).toBe(false);
-    expect(canAddCrateItems("free", 49)).toBe(true);
-    expect(canAddCrateItems("free", 50)).toBe(false);
-    expect(canAddCrateItems("free", 48, 3)).toBe(false);
+  it("gives Free favorites, saved filters, notes and 50 plays, but no crates", () => {
+    const free = limitsFor("free");
+    expect(free).toMatchObject({
+      historyWindow: 50,
+      maxFavorites: 10_000,
+      maxSavedFilters: 200,
+      notes: true,
+      tempoVotes: true,
+      comments: true,
+    });
+    expect(free).toMatchObject({
+      proFilters: false,
+      youtubePlaylist: false,
+      crateExport: false,
+      ads: true,
+    });
+    expect(canCreateCrate("free", 0)).toBe(false);
+    expect(canAddCrateItems("free", 0)).toBe(false);
   });
 
-  it("leaves Pro unlimited with 1,000 plays", () => {
-    expect(limitsFor("pro").historyWindow).toBe(1000);
-    expect(canCreateCrate("pro", 10_000)).toBe(true);
-    expect(canAddCrateItems("pro", 10_000)).toBe(true);
+  it("gives Pro 200 crates of 1,000 records, 1,000 plays and the power tools", () => {
+    const pro = limitsFor("pro");
+    expect(pro).toMatchObject({
+      historyWindow: 1000,
+      proFilters: true,
+      youtubePlaylist: true,
+      crateExport: true,
+      ads: false,
+    });
+    expect(canCreateCrate("pro", 199)).toBe(true);
+    expect(canCreateCrate("pro", 200)).toBe(false);
+    expect(canAddCrateItems("pro", 999)).toBe(true);
+    expect(canAddCrateItems("pro", 1000)).toBe(false);
   });
 
   it("treats expired or missing subscriptions as Free", () => {

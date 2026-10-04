@@ -10,7 +10,8 @@ export async function runPurge(db: Queryable): Promise<{ purged: number; unplaya
     `with purged as (
        update yt_videos
           set title = null, duration_s = null, view_count = null, thumbnail_url = null,
-              region_allowed = null, region_blocked = null, status = 'unchecked', checked_at = null
+              region_allowed = null, region_blocked = null, channel_id = null, channel_title = null,
+              tags = null, status = 'unchecked', checked_at = null
         where checked_at < now() - make_interval(days => $1)
        returning video_id
      ), unplayable as (

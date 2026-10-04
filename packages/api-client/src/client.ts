@@ -10,6 +10,8 @@ import {
   AssetSchema,
   ChangelogResponseSchema,
   ChopsSchema,
+  CommentSchema,
+  CommentsResponseSchema,
   CountResponseSchema,
   CrateAssetsResponseSchema,
   CrateDetailSchema,
@@ -20,6 +22,9 @@ import {
   DailyResponseSchema,
   DeletedResponseSchema,
   type ErrorCode,
+  FavoriteStatusSchema,
+  FavoritesResponseSchema,
+  ForYouResponseSchema,
   HistoryResponseSchema,
   LinkSuggestionResponseSchema,
   MeResponseSchema,
@@ -28,8 +33,12 @@ import {
   OkResponseSchema,
   type PlayRequestSchema,
   PlayResponseSchema,
+  ProfileResponseSchema,
   RecordSchema,
   RedirectResponseSchema,
+  SavedFilterSchema,
+  SavedFiltersResponseSchema,
+  type SaveFilterRequestSchema,
   SequenceResponseSchema,
   SharedCrateSchema,
   ShareResponseSchema,
@@ -227,6 +236,76 @@ export function createApiClient(options: ApiClientOptions) {
     },
     portal() {
       return request(RedirectResponseSchema, "POST", "/billing/portal");
+    },
+    favorites(cursor?: string | null) {
+      return request(
+        FavoritesResponseSchema,
+        "GET",
+        `/favorites${encodeQuery(cursor ? [["cursor", cursor]] : [])}`,
+      );
+    },
+    favoriteStatus(ref: { recordKey: string; videoId: string }) {
+      const q = encodeQuery([
+        ["recordKey", ref.recordKey],
+        ["videoId", ref.videoId],
+      ]);
+      return request(FavoriteStatusSchema, "GET", `/favorites/status${q}`);
+    },
+    addFavorite(ref: { recordKey: string; videoId: string }) {
+      return request(FavoriteStatusSchema, "POST", "/favorites", ref);
+    },
+    removeFavorite(ref: { recordKey: string; videoId: string }) {
+      const q = encodeQuery([
+        ["recordKey", ref.recordKey],
+        ["videoId", ref.videoId],
+      ]);
+      return request(FavoriteStatusSchema, "DELETE", `/favorites${q}`);
+    },
+    setFavoriteNote(ref: { recordKey: string; videoId: string }, note: string | null) {
+      return request(OkResponseSchema, "PATCH", "/favorites", { ...ref, note });
+    },
+    setCrateItemNote(
+      crateId: string,
+      ref: { recordKey: string; videoId: string },
+      note: string | null,
+    ) {
+      return request(OkResponseSchema, "PUT", `/crates/${encodeURIComponent(crateId)}/items/note`, {
+        ...ref,
+        note,
+      });
+    },
+    savedFilters() {
+      return request(SavedFiltersResponseSchema, "GET", "/saved-filters");
+    },
+    saveFilter(body: z.input<typeof SaveFilterRequestSchema>) {
+      return request(SavedFilterSchema, "POST", "/saved-filters", body);
+    },
+    deleteSavedFilter(id: string) {
+      return request(DeletedResponseSchema, "DELETE", `/saved-filters/${encodeURIComponent(id)}`);
+    },
+    setDisplayName(displayName: string) {
+      return request(ProfileResponseSchema, "PUT", "/me/profile", { displayName });
+    },
+    comments(recordKey: string) {
+      return request(
+        CommentsResponseSchema,
+        "GET",
+        `/records/${encodeURIComponent(recordKey)}/comments`,
+      );
+    },
+    addComment(recordKey: string, body: string) {
+      return request(CommentSchema, "POST", `/records/${encodeURIComponent(recordKey)}/comments`, {
+        body,
+      });
+    },
+    deleteComment(id: string) {
+      return request(DeletedResponseSchema, "DELETE", `/comments/${encodeURIComponent(id)}`);
+    },
+    reportComment(id: string) {
+      return request(OkResponseSchema, "POST", `/comments/${encodeURIComponent(id)}/report`);
+    },
+    forYou(page = 0) {
+      return request(ForYouResponseSchema, "GET", `/for-you?page=${page}`);
     },
     assets(params: { q?: string; cursor?: string | null } = {}) {
       const pairs: Pairs = [];

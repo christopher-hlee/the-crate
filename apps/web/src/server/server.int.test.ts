@@ -143,29 +143,30 @@ describe("history", () => {
 });
 
 describe("crates", () => {
-  it("enforces Free limits, keeps order and marks unavailable records", async () => {
+  it("keeps crates a Pro tool, keeps order and marks unavailable records", async () => {
     const user = "66666666-6666-6666-6666-666666666666";
-    const crate = await createCrate(t.pool, user, "free", { name: "Keepers" });
-    await expect(
-      createCrate(t.pool, user, "free", { name: "Seeded", seed: 5 }),
-    ).rejects.toMatchObject({ code: "pro_required" });
+    // Free accounts favorite records instead; crates are Pro (200 crates of 1,000 records).
+    await expect(createCrate(t.pool, user, "free", { name: "Keepers" })).rejects.toMatchObject({
+      code: "pro_required",
+    });
+    const crate = await createCrate(t.pool, user, "pro", { name: "Keepers" });
     for (let i = 1; i <= 50; i++) {
-      await addItem(t.pool, user, "free", crate.id, {
+      await addItem(t.pool, user, "pro", crate.id, {
         recordKey: `r:${i}`,
         videoId: `vid${String(i).padStart(8, "0")}`,
       });
     }
+    // A lapsed subscriber keeps the crate but can't add to it.
     await expect(
       addItem(t.pool, user, "free", crate.id, { recordKey: "r:51", videoId: "vid00000051" }),
-    ).rejects.toMatchObject({ code: "limit_reached" });
-    // Pro has no item cap.
+    ).rejects.toMatchObject({ code: "pro_required" });
     const detail = await addItem(t.pool, user, "pro", crate.id, {
       recordKey: "r:999",
       videoId: "vid00000999",
     });
     expect(detail.items).toHaveLength(51);
     expect(detail.items[0]?.recordKey).toBe("r:1");
-    expect(detail.items.at(-1)).toMatchObject({ recordKey: "r:999", available: false });
+    expect(detail.items.at(-1)).toMatchObject({ recordKey: "r:999", available: false, note: null });
     await expect(
       getCrate(t.pool, "77777777-7777-7777-7777-777777777777", crate.id),
     ).rejects.toMatchObject({ code: "not_found" });

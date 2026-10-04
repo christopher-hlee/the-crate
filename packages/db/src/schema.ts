@@ -131,11 +131,17 @@ export const ytVideos = pgTable(
     thumbnailUrl: text("thumbnail_url"),
     regionAllowed: text("region_allowed").array(),
     regionBlocked: text("region_blocked").array(),
+    channelId: text("channel_id"),
+    channelTitle: text("channel_title"),
+    tags: text("tags").array(),
     checkedAt: tstz("checked_at"),
     errorReports: integer("error_reports").notNull().default(0),
     firstSeenDump: date("first_seen_dump", { mode: "string" }).notNull(),
   },
-  (t) => [index("yt_videos_due").on(t.checkedAt.asc().nullsFirst())],
+  (t) => [
+    index("yt_videos_due").on(t.checkedAt.asc().nullsFirst()),
+    index("yt_videos_channel").on(t.channelId),
+  ],
 );
 
 /** Units spent per Pacific-time day, shared by every job that calls the Data API. */
@@ -270,6 +276,8 @@ export const crateItems = pgTable(
     recordKey: text("record_key").notNull(),
     videoId: text("video_id").notNull(),
     position: integer("position").notNull(),
+    /** A short note on this record in this crate. */
+    note: text("note"),
     addedAt: tstz("added_at").notNull().defaultNow(),
   },
   (t) => [
@@ -477,5 +485,80 @@ export const crateAssets = pgTable(
   (t) => [
     primaryKey({ columns: [t.crateId, t.assetId] }),
     index("crate_assets_order").on(t.crateId, t.position),
+  ],
+);
+
+// ---------------------------------------------------------------------------------------
+// Favorites, saved filters, profiles and comments (user data; keys only into the catalog)
+
+export const favorites = pgTable(
+  "favorites",
+  {
+    userId: uuid("user_id").notNull(),
+    recordKey: text("record_key").notNull(),
+    videoId: text("video_id").notNull(),
+    note: text("note"),
+    addedAt: tstz("added_at").notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.recordKey, t.videoId] }),
+    index("favorites_recent").on(t.userId, t.addedAt.desc()),
+  ],
+);
+
+export const savedFilters = pgTable(
+  "saved_filters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    name: text("name").notNull(),
+    filters: jsonb("filters").$type<Record<string, unknown>>().notNull(),
+    createdAt: tstz("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("saved_filters_name").on(t.userId, t.name)],
+);
+
+/** Public display names, shown on comments. */
+export const profiles = pgTable(
+  "profiles",
+  {
+    userId: uuid("user_id").primaryKey(),
+    displayName: text("display_name").notNull(),
+    createdAt: tstz("created_at").notNull().defaultNow(),
+    updatedAt: tstz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("profiles_display_name").on(sql`lower(${t.displayName})`)],
+);
+
+export const comments = pgTable(
+  "comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recordKey: text("record_key").notNull(),
+    userId: uuid("user_id").notNull(),
+    body: text("body").notNull(),
+    /** Hidden after enough reports, or by a moderator. */
+    hidden: boolean("hidden").notNull().default(false),
+    reportCount: integer("report_count").notNull().default(0),
+    createdAt: tstz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("comments_record").on(t.recordKey, t.createdAt.desc()),
+    index("comments_user").on(t.userId),
+  ],
+);
+
+export const commentReports = pgTable(
+  "comment_reports",
+  {
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    createdAt: tstz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.commentId, t.userId] }),
+    index("comment_reports_user").on(t.userId),
   ],
 );

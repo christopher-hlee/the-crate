@@ -26,11 +26,16 @@
               "width": 320,
               "height": 180
             }
-          }
+          },
+          "channelId": "UCmarloVennTopicArchive0",
+          "channelTitle": "Marlo Venn - Topic",
+          "tags": ["Marlo Venn", "Glass Harbour", "deep house"]
         },
         "contentDetails": {
           "duration": "PT6M12S",
-          "regionRestriction": { "blocked": ["DE", "AT"] }
+          "regionRestriction": {
+            "blocked": ["DE", "AT"]
+          }
         },
         "status": {
           "uploadStatus": "processed",
@@ -38,7 +43,9 @@
           "embeddable": true,
           "madeForKids": false
         },
-        "statistics": { "viewCount": "48213" }
+        "statistics": {
+          "viewCount": "48213"
+        }
       },
       {
         "id": "NightFerry1",
@@ -50,11 +57,15 @@
               "width": 120,
               "height": 90
             }
-          }
+          },
+          "channelId": "bad id",
+          "channelTitle": "Ferry uploads"
         },
         "contentDetails": {
           "duration": "PT7M3S",
-          "regionRestriction": { "allowed": ["US", "CA", "gb"] }
+          "regionRestriction": {
+            "allowed": ["US", "CA", "gb"]
+          }
         },
         "status": {
           "uploadStatus": "processed",
@@ -62,36 +73,54 @@
           "embeddable": true,
           "madeForKids": false
         },
-        "statistics": { "viewCount": "912" }
+        "statistics": {
+          "viewCount": "912"
+        }
       },
       {
         "id": "LowTideDub9",
-        "snippet": { "title": "Low Tide" },
-        "contentDetails": { "duration": "PT5M40S" },
+        "snippet": {
+          "title": "Low Tide"
+        },
+        "contentDetails": {
+          "duration": "PT5M40S"
+        },
         "status": {
           "uploadStatus": "processed",
           "privacyStatus": "public",
           "embeddable": false,
           "madeForKids": false
         },
-        "statistics": { "viewCount": "77" }
+        "statistics": {
+          "viewCount": "77"
+        }
       },
       {
         "id": "CalleOcho_1",
-        "snippet": { "title": "Calle Ocho Shuffle (for kids)" },
-        "contentDetails": { "duration": "PT2M51S" },
+        "snippet": {
+          "title": "Calle Ocho Shuffle (for kids)"
+        },
+        "contentDetails": {
+          "duration": "PT2M51S"
+        },
         "status": {
           "uploadStatus": "processed",
           "privacyStatus": "public",
           "embeddable": true,
           "madeForKids": true
         },
-        "statistics": { "viewCount": "1000" }
+        "statistics": {
+          "viewCount": "1000"
+        }
       },
       {
         "id": "NeonRain_77",
-        "snippet": { "title": "Neon Rain" },
-        "contentDetails": { "duration": "PT4M10S" },
+        "snippet": {
+          "title": "Neon Rain"
+        },
+        "contentDetails": {
+          "duration": "PT4M10S"
+        },
         "status": {
           "uploadStatus": "rejected",
           "privacyStatus": "public",
@@ -101,9 +130,17 @@
       },
       {
         "id": "LastTrain_1",
-        "snippet": { "title": "Last Train" },
-        "contentDetails": { "duration": "PT3M30S" },
-        "status": { "uploadStatus": "processed", "privacyStatus": "public", "embeddable": true },
+        "snippet": {
+          "title": "Last Train"
+        },
+        "contentDetails": {
+          "duration": "PT3M30S"
+        },
+        "status": {
+          "uploadStatus": "processed",
+          "privacyStatus": "public",
+          "embeddable": true
+        },
         "statistics": {}
       }
     ]

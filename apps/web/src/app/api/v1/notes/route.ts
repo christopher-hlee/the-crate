@@ -23,16 +23,16 @@ const toNote = (r: NoteRow) => ({
   createdAt: r.created_at.toISOString(),
 });
 
-async function requirePro(req: Request) {
+async function requireNotes(req: Request) {
   const viewer = await requireViewer(req);
   const pool = db();
-  if ((await planFor(pool, viewer.userId)).plan !== "pro")
+  if (!limitsFor((await planFor(pool, viewer.userId)).plan).notes)
     throw proRequired("Timestamped notes", true);
   return { viewer, pool };
 }
 
 export const GET = route(async (req) => {
-  const { viewer, pool } = await requirePro(req);
+  const { viewer, pool } = await requireNotes(req);
   const videoId = VideoIdSchema.parse(new URL(req.url).searchParams.get("videoId"));
   const res = await pool.query<NoteRow>(
     `select id, record_key, video_id, at_seconds, body, created_at from notes
@@ -43,7 +43,7 @@ export const GET = route(async (req) => {
 });
 
 export const POST = route(async (req) => {
-  const { viewer, pool } = await requirePro(req);
+  const { viewer, pool } = await requireNotes(req);
   await rateLimit(pool, "write", { userId: viewer.userId, ip: clientIp(req) });
   const body = await readJson(req, CreateNoteRequestSchema);
   const res = await pool.query<NoteRow>(

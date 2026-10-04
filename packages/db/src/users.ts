@@ -10,6 +10,11 @@ export const USER_TABLES = [
   "link_suggestions",
   "subscriptions",
   "asset_chops",
+  "favorites",
+  "saved_filters",
+  "comment_reports",
+  "comments",
+  "profiles",
 ] as const;
 
 /** Deletes every row a user owns. crate_items and crate_assets go with crates (on delete cascade). */

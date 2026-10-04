@@ -63,9 +63,10 @@ export async function crateItems(db: Pool, crateId: string): Promise<CrateItem[]
     record_key: string;
     video_id: string;
     position: number;
+    note: string | null;
     added_at: Date;
   }>(
-    "select record_key, video_id, position, added_at from crate_items where crate_id = $1 order by position, added_at",
+    "select record_key, video_id, position, note, added_at from crate_items where crate_id = $1 order by position, added_at",
     [crateId],
   );
   const items = await catalogItems(
@@ -81,6 +82,7 @@ export async function crateItems(db: Pool, crateId: string): Promise<CrateItem[]
       available: item?.available ?? false,
       record: item?.record ?? null,
       position: r.position,
+      note: r.note,
       addedAt: r.added_at.toISOString(),
     };
   });
@@ -107,10 +109,9 @@ export async function createCrate(
       "select count(*)::int as n from crates where user_id = $1",
       [userId],
     );
+    if (limitsFor(plan).maxCrates === 0) throw proRequired("Crates", true);
     if (!canCreateCrate(plan, count.rows[0]?.n ?? 0)) {
-      throw limitReached(
-        `Free accounts keep up to ${limitsFor(plan).maxCrates} crates. Go Pro for unlimited crates.`,
-      );
+      throw limitReached(`You can keep up to ${limitsFor(plan).maxCrates} crates.`);
     }
     const res = await client.query<CrateRow>(
       `insert into crates as c (user_id, name, filters, seed) values ($1, $2, $3, $4)
@@ -184,10 +185,10 @@ export async function addItem(
       [id],
     );
     const n = count.rows[0]?.n ?? 0;
+    // A Free account can still own crates from a lapsed Pro plan: they stay playable, not growable.
+    if (limitsFor(plan).maxItemsPerCrate === 0) throw proRequired("Crates", true);
     if (!canAddCrateItems(plan, n)) {
-      throw limitReached(
-        `Free crates hold up to ${limitsFor(plan).maxItemsPerCrate} records. Go Pro for unlimited crates.`,
-      );
+      throw limitReached(`A crate holds up to ${limitsFor(plan).maxItemsPerCrate} records.`);
     }
     await client.query(
       "insert into crate_items (crate_id, record_key, video_id, position) values ($1, $2, $3, $4)",
@@ -227,4 +228,20 @@ export async function removeItem(
     [id, ref.recordKey, ref.videoId],
   );
   return getCrate(db, userId, id);
+}
+
+/** A note on one record in a crate (null clears it). */
+export async function setCrateItemNote(
+  db: Pool,
+  userId: string,
+  id: string,
+  ref: { recordKey: string; videoId: string },
+  note: string | null,
+): Promise<void> {
+  await ownCrate(db, userId, id);
+  const res = await db.query(
+    "update crate_items set note = $4 where crate_id = $1 and record_key = $2 and video_id = $3",
+    [id, ref.recordKey, ref.videoId, note || null],
+  );
+  if (!res.rowCount) throw notFound("That record in this crate");
 }
