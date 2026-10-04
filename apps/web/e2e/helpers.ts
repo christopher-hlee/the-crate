@@ -6,7 +6,7 @@ export function e2eDb(): pg.Client {
   const u = new URL(
     process.env.TEST_DATABASE_URL ?? "postgres://crate:crate@localhost:5433/postgres",
   );
-  u.pathname = "/crate_e2e";
+  u.pathname = `/${process.env.E2E_DB_NAME ?? "crate_e2e"}`;
   return new pg.Client({ connectionString: u.toString() });
 }
 

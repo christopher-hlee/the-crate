@@ -95,10 +95,13 @@ function writeArchiveFixtures(dir: string): string {
 export default function globalSetup() {
   if (process.env.E2E_SKIP_SEED) return;
   const root = fileURLToPath(new URL("../../..", import.meta.url));
-  execSync("pnpm -s worker e2e:seed --database crate_e2e --releases 3000", {
-    cwd: root,
-    stdio: "inherit",
-  });
+  execSync(
+    `pnpm -s worker e2e:seed --database ${process.env.E2E_DB_NAME ?? "crate_e2e"} --releases 3000`,
+    {
+      cwd: root,
+      stdio: "inherit",
+    },
+  );
   const assetDir = process.env.E2E_ASSET_DIR;
   if (!assetDir) throw new Error("E2E_ASSET_DIR is set by playwright.config.ts");
   const manifest = writeArchiveFixtures(join(assetDir, "..", "crate-e2e-archive-src"));
@@ -106,7 +109,7 @@ export default function globalSetup() {
   const admin = new URL(
     process.env.TEST_DATABASE_URL ?? "postgres://crate:crate@localhost:5433/postgres",
   );
-  admin.pathname = "/crate_e2e";
+  admin.pathname = `/${process.env.E2E_DB_NAME ?? "crate_e2e"}`;
   execSync(`pnpm -s worker cleared:import ${JSON.stringify(manifest)}`, {
     cwd: root,
     stdio: "inherit",

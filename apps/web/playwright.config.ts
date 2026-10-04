@@ -10,7 +10,7 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
 const ADMIN = process.env.TEST_DATABASE_URL ?? "postgres://crate:crate@localhost:5433/postgres";
 const E2E_DB = (() => {
   const u = new URL(ADMIN);
-  u.pathname = "/crate_e2e";
+  u.pathname = `/${process.env.E2E_DB_NAME ?? "crate_e2e"}`;
   return u.toString();
 })();
 const executablePath = process.env.PW_CHROMIUM_PATH || undefined;
