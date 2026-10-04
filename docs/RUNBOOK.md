@@ -114,3 +114,10 @@ so the bucket needs a CORS rule allowing `GET` from the web app's origin.
 
 **Withdrawing a recording.** `update assets set status = 'withdrawn' where slug = '<slug>';`
 Listing and file serving stop at once; presigned URLs already handed out expire within an hour.
+
+## Mobile error reporting
+
+Set `EXPO_PUBLIC_SENTRY_DSN` in the EAS environment to turn on Sentry in the apps. The
+`@sentry/react-native/expo` plugin uploads source maps during EAS builds when `SENTRY_AUTH_TOKEN`,
+`SENTRY_ORG` and `SENTRY_PROJECT` are set; without them, set `SENTRY_DISABLE_AUTO_UPLOAD=true` so
+the build doesn't try.

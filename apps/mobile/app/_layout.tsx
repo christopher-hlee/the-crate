@@ -4,10 +4,13 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "../src/lib/auth";
+import { initSentry, withSentry } from "../src/lib/sentry";
+
+initSentry();
 
 const headerStyle = { backgroundColor: "#121110" };
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#121110" }}>
       <SafeAreaProvider>
@@ -32,3 +35,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default withSentry(RootLayout);

@@ -42,6 +42,8 @@ export function buildConfig(env: BuildEnv): ExpoConfig {
       "expo-router",
       "expo-secure-store",
       "expo-web-browser",
+      // Source maps upload only when SENTRY_AUTH_TOKEN is set in EAS; see docs/RUNBOOK.md.
+      "@sentry/react-native/expo",
       [
         "expo-audio",
         {
