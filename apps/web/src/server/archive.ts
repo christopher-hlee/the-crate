@@ -14,7 +14,7 @@ import {
   type RightsBasis,
   sidecarFor,
 } from "@app/core";
-import type { Pool } from "@app/db";
+import { type Pool, withTransaction } from "@app/db";
 import { ownCrate } from "./crates";
 import { env } from "./env";
 import { HttpError, limitReached, notFound, proRequired } from "./http";
@@ -229,25 +229,36 @@ export async function addCrateAsset(
   crateId: string,
   assetId: string,
 ) {
-  await ownCrate(pool, userId, crateId);
   await readyRow(pool, assetId);
   const { plan } = await planFor(pool, userId);
-  const count = await pool.query<{ n: number }>(
-    `select (select count(*) from crate_items where crate_id = $1)::int
-          + (select count(*) from crate_assets where crate_id = $1)::int as n`,
-    [crateId],
-  );
-  if (!canAddCrateItems(plan, count.rows[0]?.n ?? 0, 1))
-    throw limitReached(
-      `Free crates hold ${limitsFor(plan).maxItemsPerCrate} records. Pro lifts the limit.`,
+  await withTransaction(pool, async (client) => {
+    const crate = await client.query(
+      "select id from crates where id = $1 and user_id = $2 for update",
+      [crateId, userId],
     );
-  await pool.query(
-    `insert into crate_assets (crate_id, asset_id, position)
-     values ($1, $2, coalesce((select max(position) + 1 from crate_assets where crate_id = $1), 0))
-     on conflict do nothing`,
-    [crateId, assetId],
-  );
-  await pool.query("update crates set updated_at = now() where id = $1", [crateId]);
+    if (!crate.rowCount) throw notFound("That crate");
+    const exists = await client.query(
+      "select 1 from crate_assets where crate_id = $1 and asset_id = $2",
+      [crateId, assetId],
+    );
+    if (exists.rowCount) return;
+    // Free crate sizes count YouTube records and archive recordings together.
+    const count = await client.query<{ n: number }>(
+      `select (select count(*) from crate_items where crate_id = $1)::int
+            + (select count(*) from crate_assets where crate_id = $1)::int as n`,
+      [crateId],
+    );
+    if (!canAddCrateItems(plan, count.rows[0]?.n ?? 0))
+      throw limitReached(
+        `Free crates hold up to ${limitsFor(plan).maxItemsPerCrate} records. Go Pro for unlimited crates.`,
+      );
+    await client.query(
+      `insert into crate_assets (crate_id, asset_id, position)
+       values ($1, $2, coalesce((select max(position) + 1 from crate_assets where crate_id = $1), 0))`,
+      [crateId, assetId],
+    );
+    await client.query("update crates set updated_at = now() where id = $1", [crateId]);
+  });
   return crateAssets(pool, origin, userId, crateId);
 }
 
