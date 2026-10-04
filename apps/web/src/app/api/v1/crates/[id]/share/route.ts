@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { UuidSchema } from "@app/api-client";
+import { limitsFor } from "@app/core";
 import { requireViewer } from "@/server/auth";
 import { getCrate } from "@/server/crates";
 import { db } from "@/server/db";
@@ -15,13 +16,14 @@ async function setup(req: Request, params: Ctx["params"]) {
   const viewer = await requireViewer(req);
   const pool = db();
   await rateLimit(pool, "write", { userId: viewer.userId, ip: clientIp(req) });
-  if ((await planFor(pool, viewer.userId)).plan !== "pro") throw proRequired("Share links", true);
   return { id, viewer, pool };
 }
 
 /** Creates (or returns) the crate's share link. */
 export const POST = route<Ctx>(async (req, { params }) => {
   const { id, viewer, pool } = await setup(req, params);
+  if (!limitsFor((await planFor(pool, viewer.userId)).plan).createShared)
+    throw proRequired("Share links", true);
   const shareId = randomBytes(9).toString("base64url");
   const res = await pool.query<{ share_id: string }>(
     `update crates set share_id = coalesce(share_id, $3), updated_at = now()
@@ -34,7 +36,7 @@ export const POST = route<Ctx>(async (req, { params }) => {
   return json({ shareId: row.share_id, url: `${origin}/shared/${row.share_id}` });
 });
 
-/** Revokes the share link; the old URL stops working. */
+/** Revokes the share link; the old URL stops working. Any plan: a lapsed subscriber can unpublish. */
 export const DELETE = route<Ctx>(async (req, { params }) => {
   const { id, viewer, pool } = await setup(req, params);
   await pool.query(

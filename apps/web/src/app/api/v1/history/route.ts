@@ -16,3 +16,12 @@ export const GET = route(async (req) => {
     headers: { "cache-control": "no-store" },
   });
 });
+
+/** Clears the viewer's history (plays already counted stay counted nowhere else). */
+export const DELETE = route(async (req) => {
+  const viewer = await requireViewer(req);
+  const pool = db();
+  await rateLimit(pool, "write", { userId: viewer.userId, ip: clientIp(req) });
+  await pool.query("delete from history where user_id = $1", [viewer.userId]);
+  return json({ deleted: true });
+});

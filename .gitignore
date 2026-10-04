@@ -19,3 +19,6 @@ web-build/
 ios/
 android/
 next-env.d.ts
+
+# Agent worktrees
+.claude/worktrees/

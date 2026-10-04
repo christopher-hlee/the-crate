@@ -95,6 +95,8 @@ type Props = {
   onPlayingChange?: (playing: boolean) => void;
   /** Current position in seconds, about once a second while playing. */
   onProgress?: (seconds: number) => void;
+  /** The video finished. Callers may load the next one; it autoplays only if >50% is visible. */
+  onEnded?: (videoId: string) => void;
   title?: string;
 };
 
@@ -104,6 +106,7 @@ export function Player({
   onUnplayable,
   onPlayingChange,
   onProgress,
+  onEnded,
   title,
 }: Props) {
   const boxRef = useRef<HTMLElement>(null);
@@ -114,8 +117,8 @@ export function Player({
   const visibleRef = useRef(0);
   const currentRef = useRef<string | null>(null);
   const playedRef = useRef({ seconds: 0, logged: false });
-  const callbacks = useRef({ onPlayLogged, onUnplayable, onPlayingChange, onProgress });
-  callbacks.current = { onPlayLogged, onUnplayable, onPlayingChange, onProgress };
+  const callbacks = useRef({ onPlayLogged, onUnplayable, onPlayingChange, onProgress, onEnded });
+  callbacks.current = { onPlayLogged, onUnplayable, onPlayingChange, onProgress, onEnded };
 
   const apply = (req: PlayerRequest) => {
     const player = playerRef.current;
@@ -172,6 +175,9 @@ export function Player({
           onStateChange: (e) => {
             const playing = e.data === PLAYER_STATE.playing;
             callbacks.current.onPlayingChange?.(playing);
+            if (e.data === PLAYER_STATE.ended && currentRef.current) {
+              callbacks.current.onEnded?.(currentRef.current);
+            }
             if (timer) {
               clearInterval(timer);
               timer = null;

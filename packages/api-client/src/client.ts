@@ -46,6 +46,7 @@ import {
   StylesResponseSchema,
   type TempoVoteRequestSchema,
   type UpdateCrateRequestSchema,
+  type UpdateNoteRequestSchema,
 } from "./contracts";
 
 export class ApiError extends Error {
@@ -303,6 +304,22 @@ export function createApiClient(options: ApiClientOptions) {
     },
     reportComment(id: string) {
       return request(OkResponseSchema, "POST", `/comments/${encodeURIComponent(id)}/report`);
+    },
+    updateNote(id: string, body: z.input<typeof UpdateNoteRequestSchema>) {
+      return request(OkResponseSchema, "PATCH", `/notes/${encodeURIComponent(id)}`, body);
+    },
+    deleteNote(id: string) {
+      return request(DeletedResponseSchema, "DELETE", `/notes/${encodeURIComponent(id)}`);
+    },
+    clearHistory() {
+      return request(DeletedResponseSchema, "DELETE", "/history");
+    },
+    sharedSequence(shareId: string, page = 0) {
+      return request(
+        SequenceResponseSchema,
+        "GET",
+        `/shared/${encodeURIComponent(shareId)}/sequence?page=${page}`,
+      );
     },
     forYou(page = 0) {
       return request(ForYouResponseSchema, "GET", `/for-you?page=${page}`);

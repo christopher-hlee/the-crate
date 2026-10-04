@@ -1,4 +1,5 @@
 import { CreateNoteRequestSchema, VideoIdSchema } from "@app/api-client";
+import { limitsFor } from "@app/core";
 import { requireViewer } from "@/server/auth";
 import { db } from "@/server/db";
 import { clientIp, json, proRequired, readJson, route } from "@/server/http";

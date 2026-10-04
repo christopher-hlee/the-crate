@@ -291,6 +291,13 @@ export const CreateNoteRequestSchema = z.object({
   body: z.string().trim().min(1).max(2000),
 });
 
+export const UpdateNoteRequestSchema = z
+  .object({
+    body: z.string().trim().min(1).max(2000).optional(),
+    atSeconds: z.number().int().min(0).max(86_400).nullable().optional(),
+  })
+  .refine((v) => v.body !== undefined || v.atSeconds !== undefined, "Nothing to update");
+
 export const TempoVoteRequestSchema = z
   .object({
     releaseId: z.number().int().positive(),
