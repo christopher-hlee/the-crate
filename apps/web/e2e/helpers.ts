@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import pg from "pg";
 
 export function e2eDb(): pg.Client {
@@ -88,4 +88,21 @@ export async function expectCompliantPlayer(page: Page, min = { width: 200, heig
   expect(a.blocked, "no inert or pointer-events: none on the player or its ancestors").toEqual([]);
   expect(a.box?.width ?? 0).toBeGreaterThanOrEqual(min.width);
   expect(a.box?.height ?? 0).toBeGreaterThanOrEqual(min.height);
+}
+
+/**
+ * Scrolls a control into view and waits two frames before clicking. Chromium routes a click
+ * sent straight after a scroll by the old layout, so it can land on the cross-origin player
+ * iframe instead; people never click that fast after scrolling.
+ */
+export async function settle(locator: Locator): Promise<void> {
+  await locator.scrollIntoViewIfNeeded();
+  await locator
+    .page()
+    .evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+}
+
+export async function clickSettled(locator: Locator): Promise<void> {
+  await settle(locator);
+  await locator.click();
 }

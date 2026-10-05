@@ -1,8 +1,8 @@
 // Favorites: free for anyone signed in. One compliant player, inline notes, Play all with
 // auto-advance, hearts on lists, and "Open in YouTube" links (a Pro tool).
 
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { expectCompliantPlayer, signIn, sql } from "./helpers";
+import { expect, type Page, test } from "@playwright/test";
+import { clickSettled, expectCompliantPlayer, signIn, sql } from "./helpers";
 import { stubYouTube, ytCalls } from "./youtube-stub";
 
 const WATCH_VIDEOS = "https://www.youtube.com/watch_videos?video_ids=";
@@ -64,14 +64,6 @@ async function lastLoaded(page: Page): Promise<string | undefined> {
  * Clicks after scrolling and letting two frames render. Chromium can route a click sent right
  * after a long programmatic scroll to where the cross-origin player iframe used to be.
  */
-async function clickSettled(locator: Locator) {
-  await locator.scrollIntoViewIfNeeded();
-  await locator
-    .page()
-    .evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-  await locator.click();
-}
-
 /** Autoplay needs more than half of the player on screen. */
 async function playerVisible(page: Page) {
   await expect

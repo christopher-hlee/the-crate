@@ -2,7 +2,7 @@
 // Free/Pro split.
 
 import { expect, type Page, test } from "@playwright/test";
-import { signIn, sql } from "./helpers";
+import { settle, signIn, sql } from "./helpers";
 import { stubYouTube, ytCalls } from "./youtube-stub";
 
 test.beforeEach(async ({ page }) => {
@@ -215,6 +215,7 @@ test("player settings: random start, hide comments, kept on this device", async 
   const settings = page.getByTestId("player-settings");
   await settings.getByText("Player settings").click();
   await settings.getByLabel("Start at").selectOption("random");
+  await settle(settings.getByLabel("Hide comments"));
   await settings.getByLabel("Hide comments").check();
   await expect(page.getByTestId("comments")).toHaveCount(0);
 

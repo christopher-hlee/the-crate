@@ -68,12 +68,15 @@ test("Pro: share a crate; anyone can play it; revoking kills the link", async ({
 }) => {
   const userId = await signIn(page, { pro: true });
   const { id } = await crateWithItems(userId);
+  await sql("update crate_items set note = 'private thought' where crate_id = $1", [id]);
   const share = await (await page.request.post(`/api/v1/crates/${id}/share`)).json();
   expect(share.url).toMatch(/\/shared\/[A-Za-z0-9_-]+$/);
   const anon = await browser.newPage();
   await stubYouTube(anon);
   await anon.goto(`/shared/${share.shareId}`);
   await expect(anon.getByTestId("item-row")).toHaveCount(3);
+  const shared = await (await anon.request.get(`/api/v1/shared/${share.shareId}`)).json();
+  expect(shared.items.map((i: { note: string | null }) => i.note)).toEqual([null, null, null]);
   await page.request.delete(`/api/v1/crates/${id}/share`);
   expect((await anon.request.get(`/api/v1/shared/${share.shareId}`)).status()).toBe(404);
   await anon.close();

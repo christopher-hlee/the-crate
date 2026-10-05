@@ -6,7 +6,7 @@ import { json, notFound, route } from "@/server/http";
 type Ctx = { params: Promise<{ shareId: string }> };
 const ShareId = z.string().regex(/^[A-Za-z0-9_-]{8,40}$/);
 
-/** A shared crate: anyone can play it. */
+/** A shared crate: anyone can play it. The owner's item notes stay private. */
 export const GET = route<Ctx>(async (_req, { params }) => {
   const shareId = ShareId.parse((await params).shareId);
   const pool = db();
@@ -28,7 +28,7 @@ export const GET = route<Ctx>(async (_req, { params }) => {
         seed: crate.seed,
         itemCount: crate.itemCount,
       },
-      items: await crateItems(pool, crate.id),
+      items: (await crateItems(pool, crate.id)).map((item) => ({ ...item, note: null })),
     },
     { headers: { "cache-control": "public, max-age=30, s-maxage=60" } },
   );
