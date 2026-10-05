@@ -25,7 +25,11 @@ export const GET = route(async (req) => {
   const all = queryAll(req);
   const parsed = filtersFromSearchParams(all);
   if (!parsed.success) throw badRequest(filterError(parsed.error));
-  const exclusions = ShuffleExclusionsSchema.parse({ session: all("session"), seen: all("seen") });
+  const exclusions = ShuffleExclusionsSchema.parse({
+    session: all("session"),
+    seen: all("seen"),
+    repeats: all("repeats")[0] === "1",
+  });
   if (proFiltersUsed(parsed.data).length > 0) {
     const { plan } = await planFor(pool, viewer?.userId);
     if (plan !== "pro") throw proRequired(PRO_FILTERS_MESSAGE, true);

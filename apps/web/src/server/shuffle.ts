@@ -129,7 +129,7 @@ export async function candidateList(
 
 export type PickOptions = {
   filters: Filters;
-  exclusions: { session: readonly string[]; seen: readonly string[] };
+  exclusions: { session: readonly string[]; seen: readonly string[]; repeats?: boolean };
   userId: string | null;
   viewerCountry: string | null;
   threshold: number;
@@ -138,20 +138,23 @@ export type PickOptions = {
 
 export async function pickNext(db: Queryable, o: PickOptions): Promise<ShuffleResponse> {
   const random = o.random ?? Math.random;
+  // With repeats on, only this session's records are skipped, not everything heard before.
+  const repeats = o.exclusions.repeats === true;
+  const seenIds = repeats ? [] : o.exclusions.seen;
   const ex: Exclusions = {
     sessionRecordKeys: o.exclusions.session,
-    clientSeenIds: o.userId ? [] : o.exclusions.seen,
-    userId: o.userId,
+    clientSeenIds: o.userId ? [] : seenIds,
+    userId: repeats ? null : o.userId,
     viewerCountry: o.viewerCountry,
   };
 
   if (await isNarrow(db, o.filters, o.threshold)) {
     const session = new Set(o.exclusions.session);
-    const seen = new Set(o.exclusions.seen);
+    const seen = new Set(seenIds);
     let candidates = (await candidateList(db, o.filters, o.threshold, o.viewerCountry)).filter(
       ([rk, vid]) => !session.has(rk) && !seen.has(vid),
     );
-    if (o.userId && candidates.length > 0) {
+    if (o.userId && !repeats && candidates.length > 0) {
       const played = await db.query<{ video_id: string }>(
         "select distinct video_id from history where user_id = $1 and video_id = any($2::text[])",
         [o.userId, candidates.map(([, v]) => v)],

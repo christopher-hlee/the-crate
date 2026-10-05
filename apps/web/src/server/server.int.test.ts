@@ -117,6 +117,29 @@ describe("pickNext", () => {
       if (res.pick) picks.add(res.pick.recordKey);
     }
     expect([...picks]).toEqual(["r:5"]);
+
+    // With repeats on, heard records come round again; this session's records still don't.
+    const again = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      const res = await pickNext(t.pool, {
+        filters: { styles: ["Rare Groove"] },
+        exclusions: { session: ["r:1", "r:2"], seen: [], repeats: true },
+        userId: USER,
+        viewerCountry: null,
+        threshold: 50,
+      });
+      if (res.pick) again.add(res.pick.recordKey);
+    }
+    expect([...again].sort()).toEqual(["r:3", "r:4", "r:5"]);
+    const broad = await pickNext(t.pool, {
+      filters: { styles: ["Fusion"] },
+      exclusions: { session: [], seen: [], repeats: true },
+      userId: USER,
+      viewerCountry: null,
+      threshold: 50,
+    });
+    expect(broad.via).toBe("seek");
+    expect(broad.pick).not.toBeNull();
   });
 });
 

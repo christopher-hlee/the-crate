@@ -10,7 +10,6 @@ import {
   type Filters,
   filtersFromSearchParams,
   filtersToSearchParams,
-  formatDuration,
   normalizeFilters,
   PRO_FILTER_KEYS,
   proFiltersUsed,
@@ -25,6 +24,7 @@ import { CommentsPanel } from "@/components/CommentsPanel";
 import { FilterDrawer } from "@/components/FilterDrawer";
 import { NotePanel } from "@/components/NotePanel";
 import { Player, type PlayerRequest } from "@/components/Player";
+import { PlayerSettingsMenu } from "@/components/PlayerSettingsMenu";
 import { RecordPanel, type Scope } from "@/components/RecordPanel";
 import { SaveToCrate } from "@/components/SaveToCrate";
 import { TempoVotePanel } from "@/components/TempoVotePanel";
@@ -32,33 +32,19 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { seenVideos, sessionRecords } from "@/lib/local-lists";
+import {
+  DEFAULT_SETTINGS,
+  type PlayerSettings,
+  readSettings,
+  startSecondsFor,
+  writeSettings,
+} from "@/lib/player-settings";
 import { useViewer } from "@/lib/viewer";
-
-const START_KEY = "crate.startSeconds";
-const ADVANCE_KEY = "crate.autoAdvance";
-
-function readAdvance(): boolean {
-  try {
-    return window.localStorage.getItem(ADVANCE_KEY) !== "0";
-  } catch {
-    return true;
-  }
-}
-const START_OPTIONS = [0, 15, 30, 60];
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
-}
-
-function readStart(): number {
-  try {
-    const v = Number(window.localStorage.getItem(START_KEY));
-    return START_OPTIONS.includes(v) ? v : 0;
-  } catch {
-    return 0;
-  }
 }
 
 export function DigScreen() {
@@ -82,9 +68,8 @@ export function DigScreen() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [tempoOpen, setTempoOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [startSeconds, setStartSeconds] = useState(0);
+  const [settings, setSettings] = useState<PlayerSettings>(DEFAULT_SETTINGS);
   const [favorited, setFavorited] = useState(false);
-  const [autoAdvance, setAutoAdvance] = useState(true);
   const tokenRef = useRef(0);
   const positionRef = useRef(0);
   const nextRef = useRef<{ pick: ShufflePick; key: string } | null>(null);
@@ -93,10 +78,19 @@ export function DigScreen() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  useEffect(() => {
-    setStartSeconds(readStart());
-    setAutoAdvance(readAdvance());
-  }, []);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const heardRef = useRef(0);
+  useEffect(() => setSettings(readSettings()), []);
+  const updateSettings = (patch: Partial<PlayerSettings>) => {
+    setSettings((prev) => {
+      const nextSettings = { ...prev, ...patch };
+      writeSettings(nextSettings);
+      return nextSettings;
+    });
+    // Picks queued under the old replay setting may be stale.
+    if ("repeats" in patch) nextRef.current = null;
+  };
 
   // A Free account opening a link with Pro filters gets them removed, not a wall of errors.
   const limits = me?.limits;
@@ -113,7 +107,11 @@ export function DigScreen() {
   }, [viewerLoading, isPro]);
 
   const exclusions = useCallback(
-    () => ({ session: sessionRecords.get(), seen: me ? [] : seenVideos.get() }),
+    () => ({
+      session: sessionRecords.get(),
+      seen: me || settingsRef.current.repeats ? [] : seenVideos.get(),
+      repeats: settingsRef.current.repeats,
+    }),
     [me],
   );
 
@@ -156,11 +154,12 @@ export function DigScreen() {
       if (!me) seenVideos.add(pick.videoId);
       tokenRef.current += 1;
       positionRef.current = 0;
+      heardRef.current = 0;
       setRequest({
         videoId: pick.videoId,
         token: tokenRef.current,
         play,
-        startSeconds: readStart(),
+        startSeconds: startSecondsFor(settingsRef.current),
       });
       api
         .record(pick.recordKey)
@@ -327,10 +326,15 @@ export function DigScreen() {
             onPlayLogged={onPlayLogged}
             onProgress={(t) => {
               positionRef.current = t;
+              // Called once per second of playback. "Skip after" moves on once, after that
+              // many seconds heard; like the end of a video, it only autoplays while visible.
+              heardRef.current += 1;
+              const skip = settings.skipAfter;
+              if (skip > 0 && heardRef.current === skip && !busy) void next(true);
             }}
             onEnded={() => {
               // The next pick only autoplays while more than half the player is visible.
-              if (autoAdvance) void next(true);
+              if (settings.autoAdvance) void next(true);
             }}
           />
         ) : (
@@ -388,44 +392,7 @@ export function DigScreen() {
           >
             <SlidersHorizontal size={16} aria-hidden /> Filters
           </Button>
-          <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-ink-2">
-            <input
-              type="checkbox"
-              className="accent-[var(--accent)]"
-              checked={autoAdvance}
-              onChange={(e) => {
-                setAutoAdvance(e.target.checked);
-                try {
-                  window.localStorage.setItem(ADVANCE_KEY, e.target.checked ? "1" : "0");
-                } catch {
-                  // ignore
-                }
-              }}
-            />
-            Autoplay next
-          </label>
-          <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
-            Start at
-            <select
-              className="rounded border border-line bg-surface px-1 py-0.5"
-              value={startSeconds}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setStartSeconds(v);
-                try {
-                  window.localStorage.setItem(START_KEY, String(v));
-                } catch {
-                  // ignore
-                }
-              }}
-            >
-              {START_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s === 0 ? "the top" : formatDuration(s)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <PlayerSettingsMenu settings={settings} onChange={updateSettings} />
         </div>
         {notice && (
           <p role="status" className="text-sm text-warn">
@@ -496,7 +463,7 @@ export function DigScreen() {
             onStyle={addStyle}
           />
         )}
-        {current && <CommentsPanel recordKey={current.recordKey} />}
+        {current && !settings.hideComments && <CommentsPanel recordKey={current.recordKey} />}
         <AdSlot />
       </section>
     </div>

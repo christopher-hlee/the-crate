@@ -84,6 +84,8 @@ export type ShuffleResponse = z.infer<typeof ShuffleResponseSchema>;
 export const ShuffleExclusionsSchema = z.object({
   session: z.array(RecordKeySchema).max(SHUFFLE_EXCLUDE_MAX).default([]),
   seen: z.array(VideoIdSchema).max(SHUFFLE_EXCLUDE_MAX).default([]),
+  /** Let records the viewer has already heard come round again (a player setting). */
+  repeats: z.boolean().default(false),
 });
 
 // ---------------------------------------------------------------------------- records

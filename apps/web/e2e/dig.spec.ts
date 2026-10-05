@@ -208,3 +208,27 @@ test("account deletion removes the user's rows", async ({ page }) => {
     expect(await sql(`select 1 from ${table} where user_id = $1`, [userId])).toEqual([]);
   }
 });
+
+test("player settings: random start, hide comments, kept on this device", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("comments")).toBeVisible();
+  const settings = page.getByTestId("player-settings");
+  await settings.getByText("Player settings").click();
+  await settings.getByLabel("Start at").selectOption("random");
+  await settings.getByLabel("Hide comments").check();
+  await expect(page.getByTestId("comments")).toHaveCount(0);
+
+  // Loaded or only cued, depending on how much of the player is in view on this screen.
+  const before = (await ytCalls(page)).length;
+  await page.getByTestId("shuffle").click();
+  await expect.poll(async () => (await ytCalls(page)).length).toBeGreaterThan(before);
+  const start = (await ytCalls(page)).at(-1)?.startSeconds ?? -1;
+  expect(start).toBeGreaterThanOrEqual(10);
+  expect(start).toBeLessThanOrEqual(75);
+
+  await page.reload();
+  await expect(page.getByTestId("record-panel")).toBeVisible();
+  await expect(page.getByTestId("comments")).toHaveCount(0);
+  await page.getByTestId("player-settings").getByText("Player settings").click();
+  await expect(page.getByTestId("player-settings").getByLabel("Start at")).toHaveValue("random");
+});

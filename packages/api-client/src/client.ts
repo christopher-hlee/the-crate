@@ -119,11 +119,12 @@ export function createApiClient(options: ApiClientOptions) {
   return {
     shuffle(
       filters: Filters,
-      exclusions: { session?: readonly string[]; seen?: readonly string[] } = {},
+      exclusions: { session?: readonly string[]; seen?: readonly string[]; repeats?: boolean } = {},
     ) {
       const pairs = filterPairs(filters);
       for (const k of exclusions.session ?? []) pairs.push(["session", k]);
       for (const v of exclusions.seen ?? []) pairs.push(["seen", v]);
+      if (exclusions.repeats) pairs.push(["repeats", "1"]);
       return request(ShuffleResponseSchema, "GET", `/shuffle${encodeQuery(pairs)}`);
     },
     record(recordKey: string) {
