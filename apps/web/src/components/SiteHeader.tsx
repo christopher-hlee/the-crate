@@ -13,10 +13,12 @@ import { useViewer } from "@/lib/viewer";
 const NAV: { href: string; label: string; signedIn?: true }[] = [
   { href: "/", label: "Dig" },
   { href: "/daily", label: "Daily" },
+  { href: "/trending", label: "Trending" },
   { href: "/favorites", label: "Favorites", signedIn: true },
   { href: "/for-you", label: "For you", signedIn: true },
   { href: "/crates", label: "Crates" },
   { href: "/history", label: "History" },
+  { href: "/comments", label: "Comments", signedIn: true },
   { href: "/changelog", label: "Changelog" },
 ];
 

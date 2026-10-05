@@ -15,13 +15,14 @@ export const SITEMAP_MAX_URLS = 50_000;
 export const STATIC_SITEMAP_PATHS = [
   "/",
   "/daily",
+  "/trending",
   "/changelog",
   "/legal/terms",
   "/legal/privacy",
   "/legal/attribution",
 ] as const;
 
-export const ROBOTS_ALLOW = ["/", "/records/", "/daily", "/changelog", "/legal"];
+export const ROBOTS_ALLOW = ["/", "/records/", "/daily", "/trending", "/changelog", "/legal"];
 export const ROBOTS_DISALLOW = [
   "/api",
   "/auth",
@@ -31,6 +32,7 @@ export const ROBOTS_DISALLOW = [
   "/favorites",
   "/history",
   "/for-you",
+  "/comments",
 ];
 
 /** File 0 also carries the static pages, so it holds that many fewer records. */
