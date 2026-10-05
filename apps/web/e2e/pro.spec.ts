@@ -1,4 +1,5 @@
-// Pro on the web: gating, export, share links, seeded crates, the daily dig and tempo votes.
+// Pro on the web: gating, export, share links, seeded crates, the daily dig, and the tools
+// that stay free (notes, tempo votes).
 
 import { expect, test } from "@playwright/test";
 import { expectCompliantPlayer, signIn, sql } from "./helpers";
@@ -31,7 +32,7 @@ test("Free accounts are refused Pro tools on the server", async ({ page }) => {
   const checks = [
     page.request.get(`/api/v1/crates/${id}/export?format=csv`),
     page.request.post(`/api/v1/crates/${id}/share`),
-    page.request.get("/api/v1/notes?videoId=abcdefghijk"),
+    page.request.get("/api/v1/shuffle?q=night"),
     page.request.post("/api/v1/crates", { data: { name: "Seeded", seed: 42 } }),
   ];
   for (const res of await Promise.all(checks)) {
@@ -111,8 +112,22 @@ test("the daily dig is free to play and the same for everyone", async ({ page },
   );
 });
 
-test("Pro: tempo votes feed the community estimate", async ({ page }) => {
-  await signIn(page, { pro: true });
+test("Free: timestamped notes are free", async ({ page }) => {
+  const userId = await signIn(page);
+  const [rv] = await sql<{ record_key: string; video_id: string }>(
+    "select record_key, video_id from record_videos where playable limit 1",
+  );
+  const res = await page.request.post("/api/v1/notes", {
+    data: { recordKey: rv?.record_key, videoId: rv?.video_id, atSeconds: 42, body: "horns" },
+  });
+  expect(res.status()).toBe(201);
+  const list = await (await page.request.get(`/api/v1/notes?videoId=${rv?.video_id}`)).json();
+  expect(list.notes.map((n: { body: string }) => n.body)).toEqual(["horns"]);
+  expect(await sql("select 1 from notes where user_id = $1", [userId])).toHaveLength(1);
+});
+
+test("Free: tempo votes feed the community estimate", async ({ page }) => {
+  await signIn(page);
   const [track] = await sql<{ release_id: number; track_position: string }>(
     "select release_id, track_position from record_videos where track_position is not null limit 1",
   );

@@ -68,5 +68,8 @@ export type YtCall = {
 };
 
 export async function ytCalls(page: Page): Promise<YtCall[]> {
-  return page.evaluate(() => (window as unknown as { __yt: { calls: YtCall[] } }).__yt.calls);
+  // Empty until the stubbed iframe_api script has run, so polls wait instead of throwing.
+  return page.evaluate(
+    () => (window as unknown as { __yt?: { calls: YtCall[] } }).__yt?.calls ?? [],
+  );
 }
