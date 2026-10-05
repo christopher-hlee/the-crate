@@ -270,3 +270,108 @@ which only the end-to-end tests set. Vercel refuses dev auth outright. Deleting 
 cancels its Stripe subscription first (the deletion stops if Stripe can't be reached), and a
 late cancellation webhook for a user with no subscription row is ignored instead of recreating
 data for a deleted account. Store subscriptions still have to be cancelled in the store.
+
+## 35. Free and Pro follow the market's split; listening stays free
+
+Supersedes the tier table in the spec's "Product scope" and the Free crate limits. The split
+follows the leading crate-digging app's published tiers, with three tools moved down to Free
+so the cheaper plan is also the more generous one:
+
+- **Free (signed in):** 10,000 favorites, 200 saved filter sets, timestamped notes, tempo,
+  key and max-views filters, tap tempo and tempo/key votes, comments, a 50-play history.
+- **Pro:** crates (200 of up to 1,000 records), keyword search, topic channels, "more from"
+  this release, channel, label or artist, deep-cut and format-note filters, a 1,000-play
+  history, crate sheets (CSV/JSON), share links and seeded crates, YouTube playlist links
+  (see 40), no ads.
+
+Notes, tempo and key are Free here (the reference app keeps notes under Pro). Every record
+plays free for everyone, signed in or not; Play all and the daily dig are free too (rule 6).
+A lapsed Pro keeps read, play, trim and delete on their crates and can unshare them, but can't
+create crates or add to them; notes are kept. The numbers live in `packages/core/src/plans.ts`.
+
+## 36. Favorites are their own table
+
+`favorites` holds keys only (user, record key, video ID, note, added at), capped at 10,000,
+with no foreign keys into catalog tables. The heart or F toggles a favorite; S opens the crate
+picker on Pro and favorites on Free. Favorites feed "For you" and Trending (41) and count
+toward rank (37). Saved filter sets are stored as the same normalized filter object the URL
+uses, so a preset that includes Pro filters stays visible but locked on Free.
+
+## 37. Comments, display names and ranks
+
+Comments are per record (record key), up to 1,000 characters, shown with the author's display
+name, rank and a Pro badge. A display name is required before the first comment: 3 to 30
+letters, numbers, spaces, dots, dashes or underscores, unique case-insensitively, with staff-like
+names reserved. Rank comes from contributions only (a favorite 1 point, a comment 3, a
+tempo or key vote 2), never from plays or YouTube data. A comment that three different people
+report is hidden until a moderator looks; authors see "Hidden after reports" on their own list.
+Account deletion removes comments, reports and the profile.
+
+## 38. Keyword search, topic channels and "more from"
+
+Pro keyword search matches each word as a prefix, and every word must match within one source:
+the Discogs side (record, artist, label, track and style names) or the YouTube side (video title
+and tags). Two IMMUTABLE functions (`record_search_doc`, `video_search_doc`) back GIN expression
+indexes. The query is built from sanitized terms in `packages/core/src/keywords.ts` and only ever
+reaches SQL as a parameter. "Topic channels only" means YouTube's auto-generated
+"<Artist> - Topic" uploads. "More from" scopes the shuffle to one record key, channel ID,
+Discogs label ID or artist ID.
+
+## 39. YouTube channel and tags are stored as API data under rule 7
+
+The worker's existing `videos.list` call already returns `snippet.channelId`, `channelTitle` and
+`tags`, so adding them costs no quota. They live in `yt_videos` with the other API data, are
+refreshed with it and nulled by the purge within 30 days, and are used only as filters (topic
+channels, more from this channel, keywords). They never feed a score, a rank or Trending.
+
+## 40. YouTube playlists: a link out, Play all, and no API export yet
+
+Supersedes 20. Three ways to hear a list as one run:
+
+- **Play all** (free, every plan): the page's one player plays the list in order, advancing
+  with `loadVideoById` when a video ends. It keeps our visibility rule, error skipping and play
+  logging, which YouTube's own `loadPlaylist` would bypass.
+- **Open as YouTube playlist** (Pro): a plain link to `youtube.com/watch_videos?video_ids=…`,
+  up to 50 videos per link, so longer lists get several links. It opens an untitled, temporary
+  playlist on YouTube. It makes no API call and brings no data back, so it uses no quota and
+  needs no OAuth. The URL is not in Google's documentation. We read rule 9 as covering how we
+  get YouTube data, not where we link people, so we treat the link as allowed, but the owner
+  should confirm this before launch. Turning it off is one line in `plans.ts`.
+- **Save to my YouTube account** (not built): `playlists.insert` plus one `playlistItems.insert`
+  per video costs 50 units each, so 2,550 units for 50 videos. That is more than the share of the
+  default 10,000-unit daily quota the worker leaves free. It needs the sensitive `youtube` OAuth
+  scope, Google's verification, and a quota audit that names the feature. It stays behind
+  `FEATURE_PLAYLIST_EXPORT`, which stays off.
+
+## 41. Trending is built from favorites
+
+Trending lists the playable records the most different people favorited in the last 7 days.
+A record needs at least two fans to appear, so it never shows one person's taste. The top 50
+are cached for 10 minutes. It reads favorites only: no view counts or other YouTube data
+(rule 7). There is no "rising" list yet.
+
+## 42. Dig player settings live on the device
+
+The Dig settings are kept in `localStorage` and change only what plays next and where it starts:
+- autoplay the next record when a video ends;
+- start at the top, a fixed offset, or a random point between 0:10 and 1:15;
+- move on after a set number of seconds heard (off, 0:30, 1:00, 1:30 or 2:00);
+- let records already heard come round again (the shuffle's `repeats=1`, which keeps only
+  this session's records out);
+- hide comments.
+
+Any automatic next pick autoplays only while more than half the player is visible; otherwise it
+is cued.
+
+## 43. On mobile, long-press favorites on Free
+
+Supersedes 25 for Free accounts: a long-press on the pick card adds the record to favorites
+(with a success haptic) because Free has no crates. Pro keeps the last-crate behaviour.
+
+## 44. What the reference app has that we leave out
+
+- Time signature: there's no allowed source. Its tempo, key and time-signature fields line up
+  with Spotify's audio features, which rule 18 bars.
+- Discogs cover art: barred by rule 16. We keep the generated sleeves.
+- Bluetooth, headphone and CarPlay media controls: these need background playback of YouTube,
+  which rule 2 bars.
