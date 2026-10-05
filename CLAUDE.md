@@ -68,8 +68,9 @@ database per file from `TEST_DATABASE_URL` (default
   `pnpm --filter @app/db generate` or a hand-written SQL file.
 - Catalog tables (`releases`, `record_videos`) are rebuilt monthly and swapped. User tables
   hold keys only, with no foreign keys into catalog tables.
-- YouTube API data in `yt_videos` is refreshed or nulled within 30 days and never feeds a
-  score. View counts are a filter only.
+- YouTube API data in `yt_videos` (titles, channels, tags, view counts, thumbnails) is
+  refreshed or nulled within 30 days and never feeds a score, rank or Trending. View counts,
+  channels and tags are filters only.
 - No live YouTube or Discogs calls in tests: use `fixtures/` and the fixture dump server.
 - Commits: one logical change each, short imperative title, `pnpm verify` green.
 - Don't copy code from Digga or any other project. Don't use Samplette's name or design.
