@@ -6,7 +6,7 @@ name: Sandbox purchase of Pro (TestFlight or Play internal build, sandbox tester
     id: tab-account
 - runFlow:
     when:
-      visible: Sign in to keep crates and history across devices.
+      visible: Sign in to keep favorites, saved filters and history across devices.
     commands:
       - tapOn:
           id: sign-in

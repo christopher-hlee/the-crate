@@ -34,15 +34,21 @@ export function Chip({
   active,
   onPress,
   locked,
+  hint,
+  testID,
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
   locked?: boolean;
+  hint?: string;
+  testID?: string;
 }) {
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
+      accessibilityHint={hint}
       accessibilityState={{ selected: Boolean(active), disabled: Boolean(locked) }}
       onPress={locked ? undefined : onPress}
       className={`mb-2 mr-2 rounded-full border px-3 py-1.5 ${active ? "border-accent bg-accent" : "border-line bg-surface-2"} ${locked ? "opacity-50" : ""}`}
