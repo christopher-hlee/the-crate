@@ -28,6 +28,7 @@ import {
   HistoryResponseSchema,
   LinkSuggestionResponseSchema,
   MeResponseSchema,
+  MyCommentsResponseSchema,
   NoteSchema,
   NotesResponseSchema,
   OkResponseSchema,
@@ -45,6 +46,7 @@ import {
   ShuffleResponseSchema,
   StylesResponseSchema,
   type TempoVoteRequestSchema,
+  TrendingResponseSchema,
   type UpdateCrateRequestSchema,
   type UpdateNoteRequestSchema,
 } from "./contracts";
@@ -324,6 +326,12 @@ export function createApiClient(options: ApiClientOptions) {
     },
     forYou(page = 0) {
       return request(ForYouResponseSchema, "GET", `/for-you?page=${page}`);
+    },
+    trending() {
+      return request(TrendingResponseSchema, "GET", "/trending");
+    },
+    myComments() {
+      return request(MyCommentsResponseSchema, "GET", "/me/comments");
     },
     assets(params: { q?: string; cursor?: string | null } = {}) {
       const pairs: Pairs = [];

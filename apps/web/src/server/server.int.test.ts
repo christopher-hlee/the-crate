@@ -4,10 +4,13 @@ import type { CopyValue } from "@app/db";
 import { copyRows } from "@app/db";
 import { createTestDatabase, type TestDatabase } from "@app/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { addComment, myComments, setDisplayName } from "./community";
 import { addItem, createCrate, getCrate } from "./crates";
+import { addFavorite } from "./favorites";
 import { listHistory, logPlay } from "./history";
 import { catalogItems } from "./records";
 import { pickNext } from "./shuffle";
+import { TRENDING, trending } from "./trending";
 
 let t: TestDatabase;
 const USER = "44444444-4444-4444-4444-444444444444";
@@ -202,5 +205,44 @@ describe("crates", () => {
     ]);
     expect(items.get("r:1/vid00000001")?.available).toBe(true);
     expect(items.get("m:424242/gonegonegon")).toMatchObject({ available: false, record: null });
+  });
+});
+
+describe("trending", () => {
+  it("ranks records by recent fans, needs two of them, and skips unplayable videos", async () => {
+    const fans = [1, 2, 3].map((i) => `aaaaaaa${i}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`);
+    const ref = (i: number) => ({
+      recordKey: `r:${i}`,
+      videoId: `vid${String(i).padStart(8, "0")}`,
+    });
+    for (const u of fans) await addFavorite(t.pool, u, "free", ref(10));
+    for (const u of fans.slice(0, 2)) await addFavorite(t.pool, u, "free", ref(11));
+    await addFavorite(t.pool, fans[0] as string, "free", ref(12)); // one fan: not shown
+    for (const u of fans.slice(0, 2)) await addFavorite(t.pool, u, "free", ref(13));
+    await t.pool.query(
+      "update favorites set added_at = now() - interval '30 days' where record_key = 'r:13'",
+    );
+    await t.pool.query("delete from pick_cache where key like 'trending:%'");
+    const res = await trending(t.pool);
+    expect(res.days).toBe(TRENDING.days);
+    expect(res.items.map((i) => [i.recordKey, i.fans])).toEqual([
+      ["r:10", 3],
+      ["r:11", 2],
+    ]);
+  });
+});
+
+describe("my comments", () => {
+  it("lists the viewer's comments with the record they're on", async () => {
+    const me = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await setDisplayName(t.pool, me, "Night Owl");
+    await addComment(t.pool, me, "r:7", "first");
+    await addComment(t.pool, me, "r:8", "second");
+    const mine = await myComments(t.pool, me);
+    expect(mine.map((c) => [c.body, c.record?.title])).toEqual([
+      ["second", "Record 8"],
+      ["first", "Record 7"],
+    ]);
+    expect(await myComments(t.pool, USER)).toEqual([]);
   });
 });

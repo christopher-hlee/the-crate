@@ -1,5 +1,5 @@
 import "server-only";
-import type { Comment } from "@app/api-client";
+import type { Comment, MyComment } from "@app/api-client";
 import { contributionPoints, effectivePlan, type Rank, rankFor } from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
 import { HttpError, notFound } from "./http";
@@ -96,6 +96,37 @@ export async function listComments(
       mine: r.user_id === viewerId,
     };
   });
+}
+
+/** The viewer's own comments, newest first, with the record they're on. */
+export async function myComments(db: Pool, userId: string): Promise<MyComment[]> {
+  const res = await db.query<{
+    id: string;
+    record_key: string;
+    body: string;
+    created_at: Date;
+    hidden: boolean;
+    title: string | null;
+    artist_display: string | null;
+  }>(
+    `select c.id, c.record_key, c.body, c.created_at, c.hidden, r.title, r.artist_display
+       from comments c
+       left join lateral (
+         select title, artist_display from record_videos rv
+          where rv.record_key = c.record_key limit 1
+       ) r on true
+      where c.user_id = $1
+      order by c.created_at desc limit 500`,
+    [userId],
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    recordKey: r.record_key,
+    body: r.body,
+    createdAt: r.created_at.toISOString(),
+    hidden: r.hidden,
+    record: r.title ? { title: r.title, artist: r.artist_display ?? "" } : null,
+  }));
 }
 
 export async function addComment(

@@ -516,6 +516,28 @@ export type Comment = z.infer<typeof CommentSchema>;
 export const CommentsResponseSchema = z.object({ comments: z.array(CommentSchema) });
 export const CreateCommentRequestSchema = z.object({ body: z.string().trim().min(1).max(1000) });
 
+// ---------------------------------------------------------------------------- trending
+
+/** Records the most people favorited lately. Built from favorites only, never YouTube data. */
+export const TrendingItemSchema = CatalogItemSchema.extend({ fans: z.number().int() });
+export type TrendingItem = z.infer<typeof TrendingItemSchema>;
+export const TrendingResponseSchema = z.object({
+  items: z.array(TrendingItemSchema),
+  days: z.number().int(),
+});
+export type TrendingResponse = z.infer<typeof TrendingResponseSchema>;
+
+export const MyCommentSchema = z.object({
+  id: UuidSchema,
+  recordKey: RecordKeySchema,
+  body: z.string(),
+  createdAt: Iso,
+  hidden: z.boolean(),
+  record: z.object({ title: z.string(), artist: z.string() }).nullable(),
+});
+export type MyComment = z.infer<typeof MyCommentSchema>;
+export const MyCommentsResponseSchema = z.object({ comments: z.array(MyCommentSchema) });
+
 // ---------------------------------------------------------------------------- for you
 
 export const ForYouResponseSchema = SequenceResponseSchema.extend({
