@@ -145,9 +145,10 @@ origin, and an archive build of the apps if the lane goes to mobile.
 - [x] Trending (favorites only) and a Your comments page.
 - [x] Mobile: favorites tab, saved filters, the new filter split, comments, "more from", playlist
       links, display names.
-- [ ] Web lists: favorites page, For you, Play all, YouTube playlist links on favorites and crates.
-- [ ] Sign-in: email and password, sign-up, magic link, password reset, `next`; account display
-      name; header links; robots and sitemap.
+- [x] Web lists: favorites page with inline notes, For you, Play all with auto-advance, hearts
+      on every list, YouTube playlist links on favorites and crates, clear history.
+- [x] Sign-in: email and password, sign-up, magic link, password reset, `next`; account display
+      name and rank; header links and sign out; robots.txt and sitemaps.
 
 Owner sign-off before launch: the `watch_videos` link-out (DECISIONS 40), and whether "Open as
 YouTube playlist" stays Pro.

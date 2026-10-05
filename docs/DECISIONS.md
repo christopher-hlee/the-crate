@@ -375,3 +375,30 @@ Supersedes 25 for Free accounts: a long-press on the pick card adds the record t
 - Discogs cover art: barred by rule 16. We keep the generated sleeves.
 - Bluetooth, headphone and CarPlay media controls: these need background playback of YouTube,
   which rule 2 bars.
+
+## 45. Sign-in methods
+
+Supabase mode on the web offers:
+- email and password, plus sign-up with email confirmation;
+- a magic link;
+- a password reset that lands on `/account/password`;
+- OAuth buttons for the providers listed in `NEXT_PUBLIC_AUTH_PROVIDERS`. Spotify is never one
+  (rule 18).
+
+Every sign-in path carries a `next` parameter. Only same-origin paths starting with `/` are
+accepted; `//`, backslashes, control characters and `/login` or `/auth` targets all fall back to
+`/`. Sessions persist until sign-out, which covers a "remember me" option. Dev auth is
+unchanged.
+
+## 46. Sitemaps and robots.txt
+
+Record pages are listed in sitemaps of up to 50,000 URLs each, split by record-key ranges that
+are cached for 6 hours. They are rendered per request, so a build never needs the database and
+the files follow the monthly catalog. robots.txt allows the public pages (Dig, records, Daily,
+Trending, Changelog, legal) and keeps search engines out of the API and personal pages. No
+YouTube data appears in either.
+
+## 47. Shared crates keep item notes private
+
+A shared crate shows its records to anyone, but the owner's notes on items are left out of the
+public response.
