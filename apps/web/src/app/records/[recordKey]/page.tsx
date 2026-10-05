@@ -2,6 +2,8 @@ import { formatDuration, isRecordKey } from "@app/core";
 import { ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { CommentsPanel } from "@/components/CommentsPanel";
 import { RecordVideos } from "@/components/RecordVideos";
 import { Sleeve } from "@/components/Sleeve";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +12,13 @@ import { getRecord } from "@/server/records";
 
 type Props = { params: Promise<{ recordKey: string }>; searchParams: Promise<{ v?: string }> };
 
+// One query per request: generateMetadata and the page share it.
+const recordFor = cache(async (key: string) => getRecord(db(), key));
+
 async function load(params: Props["params"]) {
   const key = decodeURIComponent((await params).recordKey);
   if (!isRecordKey(key)) notFound();
-  const record = await getRecord(db(), key);
+  const record = await recordFor(key);
   if (!record) notFound();
   return record;
 }
@@ -91,6 +96,7 @@ export default async function RecordPage({ params, searchParams }: Props) {
           </a>
         </div>
       </article>
+      <CommentsPanel recordKey={r.recordKey} />
     </div>
   );
 }

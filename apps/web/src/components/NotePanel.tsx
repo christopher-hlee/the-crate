@@ -12,20 +12,27 @@ type Props = {
   recordKey: string;
   videoId: string;
   getPosition: () => number;
+  /** Jump the player to a note's time. */
+  onJump?: (seconds: number) => void;
 };
 
-/** Pro: timestamped notes on a video. Inline, below the player controls. */
-export function NotePanel({ open, onClose, recordKey, videoId, getPosition }: Props) {
+const byTime = (a: Note, b: Note) =>
+  (a.atSeconds ?? Number.POSITIVE_INFINITY) - (b.atSeconds ?? Number.POSITIVE_INFINITY) ||
+  b.createdAt.localeCompare(a.createdAt);
+
+/** Timestamped notes on a video, for anyone signed in. Inline, below the player controls. */
+export function NotePanel({ open, onClose, recordKey, videoId, getPosition, onJump }: Props) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [body, setBody] = useState("");
   const [stamp, setStamp] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     api
       .notes(videoId)
-      .then((r) => setNotes(r.notes))
+      .then((r) => setNotes([...r.notes].sort(byTime)))
       .catch(() => setNotes([]));
   }, [open, videoId]);
 
@@ -40,7 +47,7 @@ export function NotePanel({ open, onClose, recordKey, videoId, getPosition }: Pr
         body,
         atSeconds: stamp ? Math.floor(getPosition()) : null,
       });
-      setNotes((n) => [note, ...n]);
+      setNotes((n) => [...n, note].sort(byTime));
       setBody("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save the note.");
@@ -86,11 +93,76 @@ export function NotePanel({ open, onClose, recordKey, videoId, getPosition }: Pr
       {error && <p className="text-warn">{error}</p>}
       <ul className="space-y-1">
         {notes.map((n) => (
-          <li key={n.id} className="flex gap-2">
-            {n.atSeconds !== null && (
-              <span className="tabular-nums text-accent">{formatDuration(n.atSeconds)}</span>
+          <li key={n.id} className="flex items-start gap-2">
+            {n.atSeconds !== null &&
+              (onJump ? (
+                <button
+                  type="button"
+                  className="tabular-nums text-accent underline"
+                  onClick={() => onJump(n.atSeconds ?? 0)}
+                  title="Play from here"
+                >
+                  {formatDuration(n.atSeconds)}
+                </button>
+              ) : (
+                <span className="tabular-nums text-accent">{formatDuration(n.atSeconds)}</span>
+              ))}
+            {editing?.id === n.id ? (
+              <form
+                className="flex flex-1 gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!editing.body.trim()) return;
+                  try {
+                    await api.updateNote(n.id, { body: editing.body });
+                    setNotes((all) =>
+                      all.map((x) => (x.id === n.id ? { ...x, body: editing.body.trim() } : x)),
+                    );
+                    setEditing(null);
+                  } catch (err) {
+                    setError(err instanceof ApiError ? err.message : "Couldn't update the note.");
+                  }
+                }}
+              >
+                <input
+                  className="flex-1 rounded border border-line bg-surface px-2"
+                  value={editing.body}
+                  maxLength={2000}
+                  onChange={(e) => setEditing({ id: n.id, body: e.target.value })}
+                  aria-label="Edit note"
+                />
+                <Button type="submit" size="sm">
+                  Save
+                </Button>
+              </form>
+            ) : (
+              <span className="flex-1 whitespace-pre-wrap">{n.body}</span>
             )}
-            <span className="whitespace-pre-wrap">{n.body}</span>
+            {editing?.id !== n.id && (
+              <span className="flex gap-2 text-xs text-ink-2">
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => setEditing({ id: n.id, body: n.body })}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={async () => {
+                    try {
+                      await api.deleteNote(n.id);
+                      setNotes((all) => all.filter((x) => x.id !== n.id));
+                    } catch (err) {
+                      setError(err instanceof ApiError ? err.message : "Couldn't delete the note.");
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              </span>
+            )}
           </li>
         ))}
       </ul>

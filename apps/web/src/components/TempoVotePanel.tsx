@@ -2,6 +2,7 @@
 
 import { ApiError } from "@app/api-client";
 import { tapTempo } from "@app/core";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -11,12 +12,14 @@ type Props = {
   onClose: () => void;
   releaseId: number;
   track: { position: string; title: string } | null;
+  /** Tapping is a free tool for anyone; sending a vote needs an account. */
+  signedIn: boolean;
 };
 
 const KEYS = Array.from({ length: 12 }, (_, i) => i + 1).flatMap((n) => [`${n}A`, `${n}B`]);
 
-/** Pro: tap along to vote a tempo, and vote a key. Agreeing votes become community data. */
-export function TempoVotePanel({ open, onClose, releaseId, track }: Props) {
+/** Tap tempo for anyone; signed-in users can vote a tempo and key. Agreeing votes become community data. */
+export function TempoVotePanel({ open, onClose, releaseId, track, signedIn }: Props) {
   const [taps, setTaps] = useState<number[]>([]);
   const [key, setKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -35,27 +38,35 @@ export function TempoVotePanel({ open, onClose, releaseId, track }: Props) {
           Close
         </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => setTaps((t) => [...t.slice(-12), performance.now()])}
+          data-testid="tap"
+        >
+          Tap along
+        </Button>
+        <span className="tabular-nums text-lg" data-testid="tap-bpm">
+          {bpm ? `${bpm} BPM` : `${taps.length} / 4 taps`}
+        </span>
+        <Button size="sm" variant="ghost" onClick={() => setTaps([])}>
+          Reset
+        </Button>
+      </div>
       {!track ? (
         <p className="text-ink-2">
           This video isn&apos;t matched to a track yet, so there&apos;s nothing to vote on.
         </p>
+      ) : !signedIn ? (
+        <p className="text-ink-2">
+          <Link href="/login?next=/" className="text-accent underline">
+            Sign in
+          </Link>{" "}
+          to vote a tempo or key for this track.
+        </p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setTaps((t) => [...t.slice(-12), performance.now()])}
-            >
-              Tap along
-            </Button>
-            <span className="tabular-nums text-lg">
-              {bpm ? `${bpm} BPM` : `${taps.length} / 4 taps`}
-            </span>
-            <Button size="sm" variant="ghost" onClick={() => setTaps([])}>
-              Reset
-            </Button>
-          </div>
           <label className="inline-flex items-center gap-2">
             Key
             <select

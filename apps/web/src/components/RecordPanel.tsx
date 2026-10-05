@@ -2,20 +2,30 @@
 
 import type { RecordDetail, ShufflePick } from "@app/api-client";
 import { formatDuration } from "@app/core";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Lock } from "lucide-react";
+import Link from "next/link";
 import { Sleeve } from "@/components/Sleeve";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 
+export type Scope = {
+  labelId?: number;
+  artistId?: number;
+  recordKey?: string;
+  channelId?: string;
+};
+
 type Props = {
   pick: ShufflePick;
   detail: RecordDetail | null;
-  onScope?: (scope: { labelId?: number; artistId?: number }) => void;
+  onScope?: (scope: Scope) => void;
+  /** Click a style badge to add it to the filters. */
+  onStyle?: (style: string) => void;
   canScope: boolean;
 };
 
 /** Artist, title, label and catalog number, year, country, styles, tracklist, links. */
-export function RecordPanel({ pick, detail, onScope, canScope }: Props) {
+export function RecordPanel({ pick, detail, onScope, onStyle, canScope }: Props) {
   const r = pick.record;
   const playing = pick.track?.position;
   const label = detail?.labels[0];
@@ -34,9 +44,20 @@ export function RecordPanel({ pick, detail, onScope, canScope }: Props) {
           </p>
         </header>
         <div className="flex flex-wrap gap-1.5">
-          {r.styles.map((s) => (
-            <Badge key={s}>{s}</Badge>
-          ))}
+          {r.styles.map((s) =>
+            onStyle ? (
+              <button key={s} type="button" onClick={() => onStyle(s)} title={`Dig ${s}`}>
+                <Badge className="hover:border-accent">{s}</Badge>
+              </button>
+            ) : (
+              <Badge key={s}>{s}</Badge>
+            ),
+          )}
+          {pick.channel?.topic && (
+            <Badge title="An official audio upload from YouTube's auto-generated Topic channel">
+              Topic channel
+            </Badge>
+          )}
           {pick.tempo && (
             <Badge title={`Tempo source: ${pick.tempo.source}`}>
               {Math.round(pick.tempo.bpm)} BPM
@@ -94,25 +115,27 @@ export function RecordPanel({ pick, detail, onScope, canScope }: Props) {
           >
             Video on YouTube <ExternalLink size={14} aria-hidden />
           </a>
-          {canScope && onScope && label?.id && (
-            <button
-              type="button"
-              className="text-ink-2 underline"
-              onClick={() => onScope({ labelId: label.id ?? undefined })}
-            >
-              More from {label.name}
-            </button>
-          )}
-          {canScope && onScope && artist?.id && (
-            <button
-              type="button"
-              className="text-ink-2 underline"
-              onClick={() => onScope({ artistId: artist.id ?? undefined })}
-            >
-              More from {artist.name}
-            </button>
-          )}
+          <Link
+            href={`/records/${encodeURIComponent(pick.recordKey)}?v=${pick.videoId}`}
+            className="text-ink-2 underline"
+          >
+            Record page
+          </Link>
         </div>
+        {onScope && (
+          <MoreFrom
+            canScope={canScope}
+            onScope={onScope}
+            recordKey={pick.recordKey}
+            channel={pick.channel}
+            label={label?.id ? { id: label.id, name: label.name } : null}
+            artist={artist?.id ? { id: artist.id, name: artist.name } : null}
+            otherVideos={detail ? detail.videos.length - 1 : null}
+          />
+        )}
+        {pick.channel && (
+          <p className="text-xs text-ink-2">Uploaded to YouTube by {pick.channel.title}</p>
+        )}
         {detail && detail.pressings > 1 && (
           <p className="text-xs text-ink-2">
             {detail.pressings} pressings on Discogs · {detail.videos.length} playable video
@@ -121,5 +144,59 @@ export function RecordPanel({ pick, detail, onScope, canScope }: Props) {
         )}
       </div>
     </article>
+  );
+}
+
+/** "More from" scopes: Pro. Shown locked to Free so the tool is discoverable. */
+function MoreFrom({
+  canScope,
+  onScope,
+  recordKey,
+  channel,
+  label,
+  artist,
+  otherVideos,
+}: {
+  canScope: boolean;
+  onScope: (s: Scope) => void;
+  recordKey: string;
+  channel: ShufflePick["channel"];
+  label: { id: number; name: string } | null;
+  artist: { id: number; name: string } | null;
+  otherVideos: number | null;
+}) {
+  const options: { key: string; text: string; scope: Scope }[] = [
+    {
+      key: "release",
+      text: otherVideos ? `this release (${otherVideos + 1} videos)` : "this release",
+      scope: { recordKey },
+    },
+  ];
+  if (channel)
+    options.push({ key: "channel", text: channel.title, scope: { channelId: channel.id } });
+  if (label) options.push({ key: "label", text: label.name, scope: { labelId: label.id } });
+  if (artist) options.push({ key: "artist", text: artist.name, scope: { artistId: artist.id } });
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-testid="more-from">
+      <span className="text-ink-2">More from</span>
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          disabled={!canScope}
+          className={cn("underline", canScope ? "text-ink" : "cursor-not-allowed text-ink-2")}
+          onClick={() => onScope(o.scope)}
+          title={canScope ? undefined : "A Pro tool"}
+        >
+          {!canScope && <Lock size={12} className="mr-0.5 inline" aria-hidden />}
+          {o.text}
+        </button>
+      ))}
+      {!canScope && (
+        <Link href="/account" className="text-xs text-accent underline">
+          Go Pro
+        </Link>
+      )}
+    </div>
   );
 }

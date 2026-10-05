@@ -19,7 +19,7 @@ export const proRequired = (what: string, plural = false) =>
   new HttpError(403, "pro_required", `${what} ${plural ? "are Pro tools" : "is a Pro tool"}.`);
 export const notFound = (what = "That") => new HttpError(404, "not_found", `${what} wasn't found.`);
 export const PRO_FILTERS_MESSAGE =
-  "Tempo, key, views, deep-cut, format-note, label and artist filters";
+  'Keyword, topic-channel, deep-cut, format-note and "more from" filters';
 export const limitReached = (message: string) => new HttpError(403, "limit_reached", message);
 
 /** "yearFrom: Invalid input…" for a failed filter parse. */

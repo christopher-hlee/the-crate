@@ -12,16 +12,20 @@ import {
   filtersToSearchParams,
   formatDuration,
   normalizeFilters,
+  PRO_FILTER_KEYS,
+  proFiltersUsed,
   stableStringify,
 } from "@app/core";
-import { Bookmark, Gauge, NotebookPen, Shuffle, SlidersHorizontal } from "lucide-react";
+import { Bookmark, Gauge, Heart, NotebookPen, Shuffle, SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdSlot } from "@/components/AdSlot";
+import { CommentsPanel } from "@/components/CommentsPanel";
 import { FilterDrawer } from "@/components/FilterDrawer";
 import { NotePanel } from "@/components/NotePanel";
 import { Player, type PlayerRequest } from "@/components/Player";
-import { RecordPanel } from "@/components/RecordPanel";
+import { RecordPanel, type Scope } from "@/components/RecordPanel";
 import { SaveToCrate } from "@/components/SaveToCrate";
 import { TempoVotePanel } from "@/components/TempoVotePanel";
 import { Button } from "@/components/ui/button";
@@ -31,6 +35,15 @@ import { seenVideos, sessionRecords } from "@/lib/local-lists";
 import { useViewer } from "@/lib/viewer";
 
 const START_KEY = "crate.startSeconds";
+const ADVANCE_KEY = "crate.autoAdvance";
+
+function readAdvance(): boolean {
+  try {
+    return window.localStorage.getItem(ADVANCE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
 const START_OPTIONS = [0, 15, 30, 60];
 
 function isTyping(target: EventTarget | null): boolean {
@@ -70,6 +83,8 @@ export function DigScreen() {
   const [tempoOpen, setTempoOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [startSeconds, setStartSeconds] = useState(0);
+  const [favorited, setFavorited] = useState(false);
+  const [autoAdvance, setAutoAdvance] = useState(true);
   const tokenRef = useRef(0);
   const positionRef = useRef(0);
   const nextRef = useRef<{ pick: ShufflePick; key: string } | null>(null);
@@ -78,7 +93,24 @@ export function DigScreen() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  useEffect(() => setStartSeconds(readStart()), []);
+  useEffect(() => {
+    setStartSeconds(readStart());
+    setAutoAdvance(readAdvance());
+  }, []);
+
+  // A Free account opening a link with Pro filters gets them removed, not a wall of errors.
+  const limits = me?.limits;
+  const signedIn = me !== null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once the viewer is known
+  useEffect(() => {
+    if (viewerLoading || isPro) return;
+    const used = proFiltersUsed(filters);
+    if (used.length === 0) return;
+    const stripped: Filters = { ...filters };
+    for (const k of PRO_FILTER_KEYS) delete stripped[k];
+    setFilters(normalizeFilters(stripped));
+    setNotice("This link used Pro filters, so they were left out. The rest of the dig is free.");
+  }, [viewerLoading, isPro]);
 
   const exclusions = useCallback(
     () => ({ session: sessionRecords.get(), seen: me ? [] : seenVideos.get() }),
@@ -114,6 +146,7 @@ export function DigScreen() {
   const show = useCallback(
     (pick: ShufflePick, play: boolean) => {
       setCurrent(pick);
+      setFavorited(pick.favorited);
       setDetail(null);
       setEmpty(false);
       setSaveOpen(false);
@@ -198,18 +231,44 @@ export function DigScreen() {
     [current],
   );
 
-  // Shortcuts: N next, S save, E note, / filter search. Ignored while typing; keys pressed
-  // inside the player's iframe never reach this page, so the player keeps its own keys.
+  const toggleFavorite = useCallback(async () => {
+    if (!current) return;
+    if (!me) {
+      setNotice("Sign in to keep favorites: they're free.");
+      return;
+    }
+    const ref = { recordKey: current.recordKey, videoId: current.videoId };
+    const was = favorited;
+    setFavorited(!was);
+    try {
+      const r = was ? await api.removeFavorite(ref) : await api.addFavorite(ref);
+      setFavorited(r.favorited);
+      if (!was) setNotice(`Added to favorites (${r.total.toLocaleString("en-US")}).`);
+    } catch (err) {
+      setFavorited(was);
+      setNotice(err instanceof ApiError ? err.message : "Couldn't update favorites.");
+    }
+  }, [current, me, favorited]);
+
+  const canCrate = (limits?.maxCrates ?? 0) > 0;
+
+  // Shortcuts: N next, F favorite, S save (crate for Pro, favorite otherwise), E note,
+  // / filter search. Ignored while typing; keys pressed inside the player's iframe never
+  // reach this page, so the player keeps its own keys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         void next(true);
+      } else if ((e.key === "f" || e.key === "F") && current) {
+        e.preventDefault();
+        void toggleFavorite();
       } else if ((e.key === "s" || e.key === "S") && current) {
         e.preventDefault();
-        setSaveOpen(true);
-      } else if ((e.key === "e" || e.key === "E") && current && isPro) {
+        if (canCrate) setSaveOpen(true);
+        else void toggleFavorite();
+      } else if ((e.key === "e" || e.key === "E") && current && limits?.notes) {
         e.preventDefault();
         setNoteOpen(true);
       } else if (e.key === "/") {
@@ -220,17 +279,35 @@ export function DigScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, current, isPro]);
+  }, [next, current, canCrate, limits, toggleFavorite]);
 
-  const scope = (s: { labelId?: number; artistId?: number }) => {
+  const scope = (s: Scope) => {
     setFilters((f) =>
       normalizeFilters({
         ...f,
         ...(s.labelId ? { labelIds: [s.labelId] } : {}),
         ...(s.artistId ? { artistIds: [s.artistId] } : {}),
+        ...(s.recordKey ? { recordKeys: [s.recordKey] } : {}),
+        ...(s.channelId ? { channelIds: [s.channelId] } : {}),
       }),
     );
     setNotice("Scope set. Shuffle to dig inside it.");
+  };
+
+  const addStyle = (style: string) => {
+    setFilters((f) => normalizeFilters({ ...f, styles: [...(f.styles ?? []), style] }));
+    setNotice(`Added ${style} to the filters. Shuffle to dig it.`);
+  };
+
+  const jumpTo = (seconds: number) => {
+    if (!current) return;
+    tokenRef.current += 1;
+    setRequest({
+      videoId: current.videoId,
+      token: tokenRef.current,
+      play: true,
+      startSeconds: seconds,
+    });
   };
 
   return (
@@ -250,6 +327,10 @@ export function DigScreen() {
             onPlayLogged={onPlayLogged}
             onProgress={(t) => {
               positionRef.current = t;
+            }}
+            onEnded={() => {
+              // The next pick only autoplays while more than half the player is visible.
+              if (autoAdvance) void next(true);
             }}
           />
         ) : (
@@ -272,20 +353,30 @@ export function DigScreen() {
               N
             </kbd>
           </Button>
+          <Button
+            onClick={() => void toggleFavorite()}
+            disabled={!current}
+            aria-pressed={favorited}
+            data-testid="favorite"
+            title="Favorite (F)"
+          >
+            <Heart size={16} aria-hidden className={favorited ? "fill-accent text-accent" : ""} />
+            {favorited ? "Favorited" : "Favorite"}
+          </Button>
           <Button onClick={() => setSaveOpen((o) => !o)} disabled={!current} data-testid="save">
-            <Bookmark size={16} aria-hidden /> Save
+            <Bookmark size={16} aria-hidden /> {canCrate ? "Add to crate" : "Crates"}
           </Button>
           <Button
             onClick={() => setNoteOpen((o) => !o)}
-            disabled={!current || !isPro}
-            title={isPro ? "Timestamped note (E)" : "Timestamped notes are a Pro tool"}
+            disabled={!current || !limits?.notes}
+            title={limits?.notes ? "Timestamped note (E)" : "Sign in to take notes"}
           >
             <NotebookPen size={16} aria-hidden /> Note
           </Button>
           <Button
             onClick={() => setTempoOpen((o) => !o)}
-            disabled={!current || !isPro}
-            title={isPro ? "Tap tempo and key votes" : "Tempo and key votes are a Pro tool"}
+            disabled={!current}
+            title="Tap tempo and key votes"
           >
             <Gauge size={16} aria-hidden /> Tempo
           </Button>
@@ -298,6 +389,22 @@ export function DigScreen() {
             <SlidersHorizontal size={16} aria-hidden /> Filters
           </Button>
           <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-ink-2">
+            <input
+              type="checkbox"
+              className="accent-[var(--accent)]"
+              checked={autoAdvance}
+              onChange={(e) => {
+                setAutoAdvance(e.target.checked);
+                try {
+                  window.localStorage.setItem(ADVANCE_KEY, e.target.checked ? "1" : "0");
+                } catch {
+                  // ignore
+                }
+              }}
+            />
+            Autoplay next
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
             Start at
             <select
               className="rounded border border-line bg-surface px-1 py-0.5"
@@ -323,6 +430,11 @@ export function DigScreen() {
         {notice && (
           <p role="status" className="text-sm text-warn">
             {notice}{" "}
+            {!signedIn && notice.startsWith("Sign in") && (
+              <Link href="/login?next=/" className="underline">
+                Sign in
+              </Link>
+            )}{" "}
             <button type="button" className="underline" onClick={() => setNotice(null)}>
               Dismiss
             </button>
@@ -337,21 +449,23 @@ export function DigScreen() {
             onSaved={(name) => setNotice(`Saved to ${name}.`)}
           />
         )}
-        {current && isPro && (
+        {current && (
           <TempoVotePanel
             open={tempoOpen}
             onClose={() => setTempoOpen(false)}
             releaseId={current.releaseId}
             track={current.track}
+            signedIn={signedIn}
           />
         )}
-        {current && isPro && (
+        {current && limits?.notes && (
           <NotePanel
             open={noteOpen}
             onClose={() => setNoteOpen(false)}
             recordKey={current.recordKey}
             videoId={current.videoId}
             getPosition={() => positionRef.current}
+            onJump={jumpTo}
           />
         )}
       </section>
@@ -366,13 +480,23 @@ export function DigScreen() {
             onChange={setFilters}
             census={census}
             isPro={isPro}
+            signedIn={signedIn}
             searchRef={searchRef}
           />
         </div>
       </aside>
 
       <section className="min-w-0 space-y-6 [grid-area:record]" aria-label="Record">
-        {current && <RecordPanel pick={current} detail={detail} canScope={isPro} onScope={scope} />}
+        {current && (
+          <RecordPanel
+            pick={current}
+            detail={detail}
+            canScope={isPro}
+            onScope={scope}
+            onStyle={addStyle}
+          />
+        )}
+        {current && <CommentsPanel recordKey={current.recordKey} />}
         <AdSlot />
       </section>
     </div>
