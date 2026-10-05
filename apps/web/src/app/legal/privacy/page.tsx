@@ -32,13 +32,24 @@ export default function PrivacyPage() {
       <h2 className="text-lg font-semibold">What we keep</h2>
       <ul className="list-inside list-disc space-y-1">
         <li>Your account: an ID and email address from our sign-in provider.</li>
-        <li>What you save: crates, notes, tempo and key votes, link suggestions.</li>
+        <li>
+          What you save: favorites, crates, saved filters, notes, tempo and key votes, link
+          suggestions.
+        </li>
+        <li>
+          What you post: your display name and comments, which anyone can read next to the record,
+          and the comments you report. A comment several people report is hidden.
+        </li>
         <li>
           History: the plays in your plan&apos;s window (50 on Free, 1,000 on Pro), used to keep
           played records out of your shuffle.
         </li>
         <li>
           Error reports when a video fails to play, and a hashed IP address for rate limiting.
+        </li>
+        <li>
+          Player settings (where a record starts, autoplay, hiding comments) stay in your
+          browser&apos;s storage.
         </li>
         <li>
           Subscription status from Stripe, the App Store or Google Play. We never see card details.
@@ -49,8 +60,8 @@ export default function PrivacyPage() {
         reaches us beyond the shuffle request that uses it.
       </p>
       <p>
-        YouTube data we store about videos (titles, durations, view counts, thumbnails,
-        availability) is refreshed or deleted within 30 days.
+        YouTube data we store about videos (titles, channels, tags, durations, view counts,
+        thumbnails, availability) is refreshed or deleted within 30 days.
       </p>
       <h2 className="text-lg font-semibold">Deleting your data</h2>
       <p>
