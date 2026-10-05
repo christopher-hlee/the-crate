@@ -1,6 +1,14 @@
 import type { CatalogItem } from "@app/api-client";
 import { useFocusEffect } from "expo-router";
-import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useAuth } from "../lib/auth";
 import { config } from "../lib/config";
@@ -11,6 +19,10 @@ import { Empty, Notice } from "./ui";
 type Props<T extends CatalogItem> = {
   items: T[];
   actions?: (item: T, index: number) => ReactNode;
+  /** Inline content under a row, such as a note or its editor. */
+  below?: (item: T, index: number) => ReactNode;
+  /** Anything besides the items that the rows render from (FlatList's extraData). */
+  extraData?: unknown;
   header?: ReactElement;
   emptyText?: string;
   onEndReached?: () => void;
@@ -23,6 +35,8 @@ const keyOf = (i: CatalogItem) => `${i.recordKey}/${i.videoId}`;
 export function ItemListPlayer<T extends CatalogItem>({
   items,
   actions,
+  below,
+  extraData,
   header,
   emptyText = "Nothing here yet.",
   onEndReached,
@@ -43,6 +57,7 @@ export function ItemListPlayer<T extends CatalogItem>({
   useFocusEffect(useCallback(() => () => player.current?.pause(), []));
 
   const currentItem = items.find((i) => keyOf(i) === current);
+  const extra = useMemo(() => ({ current, extraData }), [current, extraData]);
 
   return (
     <View className="flex-1">
@@ -64,7 +79,9 @@ export function ItemListPlayer<T extends CatalogItem>({
       ) : null}
       <FlatList
         data={items}
+        extraData={extra}
         keyExtractor={(item, i) => `${keyOf(item)}-${i}`}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View className="px-4 pt-3">
             {header}
@@ -79,41 +96,46 @@ export function ItemListPlayer<T extends CatalogItem>({
           const active = keyOf(item) === current;
           return (
             <View
-              className={`mx-4 mb-2 flex-row items-center rounded-md border px-3 py-2 ${active ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+              className={`mx-4 mb-2 rounded-md border px-3 py-2 ${active ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
             >
-              <Pressable
-                testID={`item-${index}`}
-                accessibilityRole="button"
-                accessibilityLabel={r ? `Play ${r.artist} – ${r.title}` : "Unavailable record"}
-                disabled={!item.available}
-                className="flex-1 flex-row items-center"
-                onPress={() => {
-                  setCurrent(keyOf(item));
-                  setNotice(null);
-                  player.current?.load(item.videoId, { autoplay: true });
-                }}
-              >
-                <Sleeve
-                  label={r?.label}
-                  catno={r?.catno}
-                  year={r?.year}
-                  styles={r?.styles}
-                  size={44}
-                />
-                <View className="ml-3 flex-1">
-                  <Text
-                    numberOfLines={1}
-                    className={item.available ? "font-medium text-ink" : "text-ink-2 line-through"}
-                  >
-                    {r ? `${r.artist} – ${r.title}` : "No longer in the catalog"}
-                  </Text>
-                  <Text numberOfLines={1} className="text-xs text-ink-2">
-                    {subtitle?.(item) ??
-                      [r?.track?.title, r?.year, r?.label].filter(Boolean).join(" · ")}
-                  </Text>
-                </View>
-              </Pressable>
-              {actions?.(item, index)}
+              <View className="flex-row items-center">
+                <Pressable
+                  testID={`item-${index}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={r ? `Play ${r.artist} – ${r.title}` : "Unavailable record"}
+                  disabled={!item.available}
+                  className="flex-1 flex-row items-center"
+                  onPress={() => {
+                    setCurrent(keyOf(item));
+                    setNotice(null);
+                    player.current?.load(item.videoId, { autoplay: true });
+                  }}
+                >
+                  <Sleeve
+                    label={r?.label}
+                    catno={r?.catno}
+                    year={r?.year}
+                    styles={r?.styles}
+                    size={44}
+                  />
+                  <View className="ml-3 flex-1">
+                    <Text
+                      numberOfLines={1}
+                      className={
+                        item.available ? "font-medium text-ink" : "text-ink-2 line-through"
+                      }
+                    >
+                      {r ? `${r.artist} – ${r.title}` : "No longer in the catalog"}
+                    </Text>
+                    <Text numberOfLines={1} className="text-xs text-ink-2">
+                      {subtitle?.(item) ??
+                        [r?.track?.title, r?.year, r?.label].filter(Boolean).join(" · ")}
+                    </Text>
+                  </View>
+                </Pressable>
+                {actions?.(item, index)}
+              </View>
+              {below?.(item, index)}
             </View>
           );
         }}

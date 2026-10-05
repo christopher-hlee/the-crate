@@ -14,11 +14,12 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const run = async (key: string, fn: () => Promise<void>, done?: () => void) => {
+  // `fn` resolving to false means the person backed out (a dismissed sign-in sheet): stay here.
+  const run = async (key: string, fn: () => Promise<unknown>, done?: () => void) => {
     setBusy(key);
     setError(null);
     try {
-      await fn();
+      if ((await fn()) === false) return;
       done?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");

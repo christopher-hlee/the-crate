@@ -1,10 +1,10 @@
-import { ApiError } from "@app/api-client";
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { useAuth } from "../lib/auth";
+import { errorMessage } from "../lib/errors";
 import { Button } from "./ui";
 
-/** A timestamped note on the playing video (Pro). Inline, never over the player. */
+/** A timestamped note on the playing video (limits.notes). Inline, never over the player. */
 export function NotePanel({
   item,
   position,
@@ -23,11 +23,13 @@ export function NotePanel({
 
   const save = async () => {
     setBusy(true);
+    // A retry starts clean: the last attempt's error no longer applies.
+    setError(null);
     try {
       await api.createNote({ ...item, atSeconds: stamp, body });
       onDone("Note saved.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't save the note.");
+      setError(errorMessage(err, "Couldn't save the note."));
     } finally {
       setBusy(false);
     }
@@ -48,7 +50,10 @@ export function NotePanel({
       {error ? <Text className="mb-2 text-warn">{error}</Text> : null}
       <TextInput
         value={body}
-        onChangeText={setBody}
+        onChangeText={(t) => {
+          setBody(t);
+          setError(null);
+        }}
         multiline
         maxLength={2000}
         placeholder="What's here? A break, a vocal, a loop…"

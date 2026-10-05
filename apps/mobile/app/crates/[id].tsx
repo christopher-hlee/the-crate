@@ -2,9 +2,13 @@ import { ApiError, type CatalogItem, type CrateDetail } from "@app/api-client";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, Share, Text, View } from "react-native";
+import { HeartButton } from "../../src/components/HeartButton";
 import { ItemListPlayer } from "../../src/components/ItemListPlayer";
+import { PlaylistLinks } from "../../src/components/PlaylistLinks";
 import { Button, Chip, Notice } from "../../src/components/ui";
 import { useAuth } from "../../src/lib/auth";
+import { favoriteStore } from "../../src/lib/favorites";
+import { useFavoritesVersion, useToggleFavorite } from "../../src/lib/useFavorite";
 
 type Tab = "saved" | "seeded";
 
@@ -20,6 +24,8 @@ export default function CrateScreen() {
   const [tab, setTab] = useState<Tab>("saved");
   const [notice, setNotice] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const toggleFavorite = useToggleFavorite();
+  const favoritesVersion = useFavoritesVersion();
 
   const load = useCallback(() => {
     if (!id) return;
@@ -97,6 +103,20 @@ export default function CrateScreen() {
       .catch((err) => setNotice(err instanceof ApiError ? err.message : "Couldn't remove it."));
   };
 
+  const heart = (item: CatalogItem) => {
+    const favorited = favoriteStore.get(item) ?? false;
+    return (
+      <HeartButton
+        favorited={favorited}
+        onPress={() =>
+          void toggleFavorite(item, favorited).then((r) => {
+            if (!r.ok && r.error) setNotice(r.error);
+          })
+        }
+      />
+    );
+  };
+
   const deleteCrate = () =>
     Alert.alert("Delete this crate?", "The records stay in the catalog; only this crate goes.", [
       { text: "Cancel", style: "cancel" },
@@ -132,6 +152,11 @@ export default function CrateScreen() {
         ) : null}
         <Button variant="ghost" label="Delete crate" onPress={deleteCrate} />
       </View>
+      <PlaylistLinks
+        items={tab === "seeded" && seeded ? (sequence?.items ?? []) : (detail?.items ?? [])}
+        allowed={Boolean(me?.limits.youtubePlaylist)}
+        partial={tab === "seeded" && seeded && Boolean(sequence?.hasMore)}
+      />
     </View>
   );
 
@@ -144,6 +169,8 @@ export default function CrateScreen() {
           key="seeded"
           items={sequence?.items ?? []}
           header={header}
+          extraData={favoritesVersion}
+          actions={heart}
           onEndReached={more}
           emptyText="No records match this crate's filters."
         />
@@ -152,16 +179,20 @@ export default function CrateScreen() {
           key="saved"
           items={detail?.items ?? []}
           header={header}
+          extraData={favoritesVersion}
           emptyText="This crate is empty. Save records from Dig to fill it."
           actions={(item) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Remove from crate"
-              onPress={() => remove(item)}
-              className="ml-2 px-2 py-2"
-            >
-              <Text className="text-ink-2">Remove</Text>
-            </Pressable>
+            <View className="flex-row items-center">
+              {heart(item)}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove from crate"
+                onPress={() => remove(item)}
+                className="ml-1 px-2 py-2"
+              >
+                <Text className="text-ink-2">Remove</Text>
+              </Pressable>
+            </View>
           )}
         />
       )}

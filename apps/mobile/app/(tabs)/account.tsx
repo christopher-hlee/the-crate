@@ -1,10 +1,11 @@
-import { APP_NAME } from "@app/core";
+import { APP_NAME, PLAN_LIMITS } from "@app/core";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { Alert, Platform, ScrollView, Text, View } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { DisplayNameForm } from "../../src/components/DisplayNameForm";
 import { Button, Notice, Section } from "../../src/components/ui";
 import { archiveEnabled } from "../../src/lib/archive";
 import { useAuth } from "../../src/lib/auth";
@@ -16,6 +17,76 @@ const SOURCE: Record<string, string> = {
   app_store: "the App Store",
   play_store: "Google Play",
 };
+
+const FREE = PLAN_LIMITS.free;
+const PRO = PLAN_LIMITS.pro;
+
+// What each plan includes. Listening is never on either list: playing is free for everyone.
+const FREE_TOOLS = [
+  `Favorites (up to ${FREE.maxFavorites.toLocaleString()}) and ${FREE.maxSavedFilters} saved filter sets`,
+  "Timestamped notes on any record",
+  "Tempo, key and view-count filters",
+  "Comments, and tempo and key votes",
+];
+const PRO_TOOLS = [
+  `Crates: ${PRO.maxCrates ?? "unlimited"}, up to ${PRO.maxItemsPerCrate?.toLocaleString() ?? "any number of"} records each, with seeded orders and share links`,
+  "Keyword search and topic-channel filters",
+  "“More from” a release, channel, label or artist",
+  `A ${PRO.historyWindow.toLocaleString()}-play history`,
+  "CSV and JSON exports, and YouTube playlist links",
+  "No ads",
+];
+
+function ToolList({ title, items }: { title: string; items: readonly string[] }) {
+  return (
+    <View className="mb-3">
+      <Text className="mb-1 font-semibold text-ink">{title}</Text>
+      {items.map((t) => (
+        <Text key={t} className="text-ink-2">
+          · {t}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+/** The public name shown with comments, and the contribution rank beside it. */
+function ProfileSection({ onSaved }: { onSaved: (message: string) => void }) {
+  const { me } = useAuth();
+  const [editing, setEditing] = useState(false);
+  if (!me) return null;
+  const name = me.profile?.displayName ?? null;
+  return (
+    <Section title="Profile">
+      {name && !editing ? (
+        <>
+          <Text testID="display-name" className="text-lg font-semibold text-ink">
+            {name}
+          </Text>
+          <Text className="mb-2 text-ink-2">
+            {me.rank.title} · {me.rank.points.toLocaleString()} point
+            {me.rank.points === 1 ? "" : "s"} from favorites, comments and votes
+          </Text>
+          <Button variant="ghost" label="Change display name" onPress={() => setEditing(true)} />
+        </>
+      ) : (
+        <DisplayNameForm
+          initial={name ?? ""}
+          prompt={
+            name
+              ? "Choose a new display name."
+              : "Choose a display name. It's shown with your comments."
+          }
+          onSaved={() => {
+            setEditing(false);
+            onSaved("Display name saved.");
+          }}
+          onCancel={name ? () => setEditing(false) : undefined}
+        />
+      )}
+    </Section>
+  );
+}
 
 export default function AccountScreen() {
   const { api, me, refresh, signOut } = useAuth();
@@ -68,7 +139,7 @@ export default function AccountScreen() {
   const deleteAccount = () =>
     Alert.alert(
       "Delete your account?",
-      "Your crates, history, notes and votes are deleted now, and everything else within 7 days. A store subscription has to be cancelled in the store.",
+      "Your favorites, crates, saved filters, history, notes, comments, votes and display name are deleted now, and everything else within 7 days. A store subscription has to be cancelled in the store.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -101,7 +172,7 @@ export default function AccountScreen() {
         ) : (
           <Section title="Sign in">
             <Text className="mb-3 text-ink-2">
-              Sign in to keep crates and history across devices.
+              Sign in to keep favorites, saved filters and history across devices.
             </Text>
             <Button
               testID="sign-in"
@@ -111,6 +182,7 @@ export default function AccountScreen() {
             />
           </Section>
         )}
+        {me ? <ProfileSection onSaved={setNotice} /> : null}
         <Section title="Plan">
           <Text testID="plan" className="mb-1 text-lg font-semibold text-ink">
             {me?.plan === "pro" ? "Pro" : "Free"}
@@ -120,12 +192,15 @@ export default function AccountScreen() {
               {me.planSource ? `Billed through ${SOURCE[me.planSource]}. ` : ""}
               {me.expiresAt ? `Renews or ends ${new Date(me.expiresAt).toLocaleDateString()}.` : ""}
             </Text>
-          ) : (
-            <Text className="mb-3 text-ink-2">
-              Listening is free, always. Pro adds digging tools: tempo, key and deep-cut filters,
-              seeded crates, notes, unlimited crates, a 1,000-play history and crate sheets.
-            </Text>
-          )}
+          ) : null}
+          <Text className="mb-3 text-ink-2">
+            Listening is free, always, signed in or not. Plans only add tools.
+          </Text>
+          <ToolList title="Free, with an account" items={FREE_TOOLS} />
+          <ToolList
+            title={me?.plan === "pro" ? "Pro, which you have" : "Pro adds"}
+            items={PRO_TOOLS}
+          />
           {me && me.plan !== "pro" && packages?.length
             ? packages.map((pkg) => (
                 <View key={pkg.identifier} className="mb-2">

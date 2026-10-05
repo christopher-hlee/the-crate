@@ -21,6 +21,15 @@ export default function TabsLayout() {
         options={{ title: "Dig", tabBarIcon: icon("◎"), tabBarButtonTestID: "tab-dig" }}
       />
       <Tabs.Screen
+        name="favorites"
+        options={{
+          title: "Favorites",
+          // U+FE0E: a text heart that takes the tab tint, not an emoji.
+          tabBarIcon: icon("♡︎"),
+          tabBarButtonTestID: "tab-favorites",
+        }}
+      />
+      <Tabs.Screen
         name="crates"
         options={{ title: "Crates", tabBarIcon: icon("▤"), tabBarButtonTestID: "tab-crates" }}
       />
