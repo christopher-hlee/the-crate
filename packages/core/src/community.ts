@@ -3,15 +3,55 @@
 
 export const DISPLAY_NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{2,29}$/u;
 
-/** Names that would impersonate the service or staff. */
-const RESERVED = /^(admin|administrator|moderator|mod|staff|support|system|official|the ?crate)$/i;
+/**
+ * Words that would impersonate the service or staff, checked against the name's key (see
+ * displayNameKey), so "Moderator_" or "The-Crate" are caught too.
+ */
+const RESERVED_EXACT = new Set([
+  "admin",
+  "administrator",
+  "mod",
+  "moderator",
+  "staff",
+  "support",
+  "system",
+  "official",
+]);
+const RESERVED_PREFIX = ["admin", "staff", "moderator", "official"];
+const RESERVED_ANYWHERE = ["thecrate", "moderator"];
+
+/** The name as stored: compatibility forms (fullwidth letters and the like) folded, trimmed. */
+export function normalizeDisplayName(name: string): string {
+  return name.normalize("NFKC").trim();
+}
+
+/** The comparison key: normalized, lowercased, with spaces, dots, dashes and underscores gone. */
+export function displayNameKey(name: string): string {
+  return normalizeDisplayName(name)
+    .toLowerCase()
+    .replace(/[ ._-]/g, "");
+}
+
+/** Latin, Cyrillic and Greek share lookalike letters, so a name may use only one of them. */
+function mixesLookalikeScripts(name: string): boolean {
+  const scripts = [/\p{Script=Latin}/u, /\p{Script=Cyrillic}/u, /\p{Script=Greek}/u];
+  return scripts.filter((re) => re.test(name)).length > 1;
+}
 
 export function displayNameProblem(name: string): string | null {
-  const v = name.trim();
+  const v = normalizeDisplayName(name);
   if (!DISPLAY_NAME_PATTERN.test(v)) {
     return "Use 3 to 30 letters, numbers, spaces, dots, dashes or underscores, starting with a letter or number.";
   }
-  if (RESERVED.test(v)) return "That name is reserved.";
+  if (mixesLookalikeScripts(v)) return "Use letters from one alphabet.";
+  const key = displayNameKey(v);
+  if (
+    RESERVED_EXACT.has(key) ||
+    RESERVED_PREFIX.some((w) => key.startsWith(w)) ||
+    RESERVED_ANYWHERE.some((w) => key.includes(w))
+  ) {
+    return "That name is reserved.";
+  }
   return null;
 }
 

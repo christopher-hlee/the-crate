@@ -48,7 +48,7 @@ CREATE INDEX "comment_reports_user" ON "comment_reports" USING btree ("user_id")
 CREATE INDEX "comments_record" ON "comments" USING btree ("record_key","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "comments_user" ON "comments" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "favorites_recent" ON "favorites" USING btree ("user_id","added_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE UNIQUE INDEX "profiles_display_name" ON "profiles" USING btree (lower("display_name"));--> statement-breakpoint
+CREATE UNIQUE INDEX "profiles_display_name" ON "profiles" USING btree (lower(regexp_replace("display_name", '[ ._-]', '', 'g')));--> statement-breakpoint
 CREATE UNIQUE INDEX "saved_filters_name" ON "saved_filters" USING btree ("user_id","name");--> statement-breakpoint
 CREATE INDEX "yt_videos_channel" ON "yt_videos" USING btree ("channel_id");--> statement-breakpoint
 -- Keyword search (a Pro filter). The wrappers are IMMUTABLE so they can back expression

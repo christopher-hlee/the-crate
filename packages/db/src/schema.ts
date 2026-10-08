@@ -527,7 +527,12 @@ export const profiles = pgTable(
     createdAt: tstz("created_at").notNull().defaultNow(),
     updatedAt: tstz("updated_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("profiles_display_name").on(sql`lower(${t.displayName})`)],
+  // Unique ignoring case, spaces, dots, dashes and underscores (core's displayNameKey).
+  (t) => [
+    uniqueIndex("profiles_display_name").on(
+      sql`lower(regexp_replace(${t.displayName}, '[ ._-]', '', 'g'))`,
+    ),
+  ],
 );
 
 export const comments = pgTable(

@@ -37,12 +37,19 @@ export default function PrivacyPage() {
           suggestions.
         </li>
         <li>
-          What you post: your display name and comments, which anyone can read next to the record,
-          and the comments you report. A comment several people report is hidden.
+          What you post: your display name and comments, which anyone can read next to the record
+          (search engines included). Each comment shows your rank, worked out from how many
+          favorites, comments and tempo or key votes you have, and a Pro badge while you subscribe.
+          We also keep the comments you report; a comment several people report is hidden.
+        </li>
+        <li>
+          Counts without names: Trending shows how many people favorited a record this week, never
+          who.
         </li>
         <li>
           History: the plays in your plan&apos;s window (50 on Free, 1,000 on Pro), used to keep
-          played records out of your shuffle.
+          played records out of your shuffle and, with your favorites, to pick the styles for For
+          you.
         </li>
         <li>
           Error reports when a video fails to play, and a hashed IP address for rate limiting.

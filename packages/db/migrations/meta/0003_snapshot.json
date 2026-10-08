@@ -1424,7 +1424,7 @@
           "name": "profiles_display_name",
           "columns": [
             {
-              "expression": "lower(\"display_name\")",
+              "expression": "lower(regexp_replace(\"display_name\", '[ ._-]', '', 'g'))",
               "asc": true,
               "isExpression": true,
               "nulls": "last"

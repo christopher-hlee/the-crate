@@ -51,7 +51,7 @@ the app):
 | User ID | App functionality | Supabase user ID; also RevenueCat's app user ID |
 | Purchase history | App functionality | Store subscriptions through RevenueCat |
 | Product interaction | App functionality | Play history (record and video played), favorites, crates, saved filters, notes, votes |
-| Other user content | App functionality | Display name and comments (public), comment reports |
+| Other user content | App functionality | Display name and comments (public, with rank and Pro badge), comment reports |
 | Crash data | App functionality | Sentry, when a DSN is configured |
 
 Google Play data safety matches: the same data, encrypted in transit, deletable in the app

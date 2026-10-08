@@ -77,6 +77,10 @@ test("Pro: share a crate; anyone can play it; revoking kills the link", async ({
   await expect(anon.getByTestId("item-row")).toHaveCount(3);
   const shared = await (await anon.request.get(`/api/v1/shared/${share.shareId}`)).json();
   expect(shared.items.map((i: { note: string | null }) => i.note)).toEqual([null, null, null]);
+  // Nor in the server-rendered page's data.
+  expect(await (await anon.request.get(`/shared/${share.shareId}`)).text()).not.toContain(
+    "private thought",
+  );
   await page.request.delete(`/api/v1/crates/${id}/share`);
   expect((await anon.request.get(`/api/v1/shared/${share.shareId}`)).status()).toBe(404);
   await anon.close();

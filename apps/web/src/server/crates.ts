@@ -88,6 +88,11 @@ export async function crateItems(db: Pool, crateId: string): Promise<CrateItem[]
   });
 }
 
+/** A shared crate's items for anyone with the link: the owner's notes stay private. */
+export async function publicCrateItems(db: Pool, crateId: string): Promise<CrateItem[]> {
+  return (await crateItems(db, crateId)).map((item) => ({ ...item, note: null }));
+}
+
 export async function getCrate(db: Pool, userId: string, id: string): Promise<CrateDetail> {
   const crate = await ownCrate(db, userId, id);
   return { crate: toCrate(crate), items: await crateItems(db, id) };

@@ -245,4 +245,12 @@ describe("my comments", () => {
     ]);
     expect(await myComments(t.pool, USER)).toEqual([]);
   });
+
+  it("treats names that differ only in case, separators or width as taken", async () => {
+    const other = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    for (const copy of ["night.owl", "NIGHT_OWL", "Ｎight Owl"]) {
+      await expect(setDisplayName(t.pool, other, copy)).rejects.toMatchObject({ status: 409 });
+    }
+    expect(await setDisplayName(t.pool, other, "Ｄay Owl")).toEqual({ displayName: "Day Owl" });
+  });
 });

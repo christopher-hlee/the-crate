@@ -30,8 +30,11 @@ export function safeNextPath(raw: string | null | undefined, fallback = "/"): st
     return fallback;
   }
   if (url.origin !== NEXT_BASE) return fallback;
-  if (/^\/(login|auth)(\/|$)/.test(url.pathname)) return fallback;
-  return `${url.pathname}${url.search}${url.hash}`;
+  // Normalising removes dot segments, so "/.//evil.example" becomes "//evil.example": check the
+  // result again, since a path starting "//" is protocol-relative and leaves the site.
+  const out = `${url.pathname}${url.search}${url.hash}`;
+  if (out.startsWith("//") || /^\/(login|auth)(\/|$)/.test(url.pathname)) return fallback;
+  return out;
 }
 
 /**

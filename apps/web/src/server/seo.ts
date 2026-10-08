@@ -33,6 +33,7 @@ export const ROBOTS_DISALLOW = [
   "/history",
   "/for-you",
   "/comments",
+  "/shared",
 ];
 
 /** File 0 also carries the static pages, so it holds that many fewer records. */
@@ -122,9 +123,15 @@ export async function sitemapEntries(id: number): Promise<MetadataRoute.Sitemap>
   const starts = await cachedStarts();
   if (starts[id] === undefined) return out;
   try {
-    for (const key of await sitemapRecordKeys(db(), starts, id)) {
-      out.push({ url: `${base}/records/${encodeURIComponent(key)}` });
+    // Each file's keys are cached with its starts, so repeat fetches skip the catalog scan.
+    const pool = db();
+    const cacheKey = `sitemap:keys:v1:${id}:${starts[id]}`;
+    let keys = (await cacheGet<{ keys: string[] }>(pool, cacheKey))?.keys;
+    if (!keys) {
+      keys = await sitemapRecordKeys(pool, starts, id);
+      await cacheSet(pool, cacheKey, { keys }, STARTS_TTL_SECONDS);
     }
+    for (const key of keys) out.push({ url: `${base}/records/${encodeURIComponent(key)}` });
   } catch (err) {
     console.error(`sitemap ${id}: catalog unavailable`, err);
   }

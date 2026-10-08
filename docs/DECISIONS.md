@@ -301,8 +301,9 @@ uses, so a preset that includes Pro filters stays visible but locked on Free.
 
 Comments are per record (record key), up to 1,000 characters, shown with the author's display
 name, rank and a Pro badge. A display name is required before the first comment: 3 to 30
-letters, numbers, spaces, dots, dashes or underscores, unique case-insensitively, with staff-like
-names reserved. Rank comes from contributions only (a favorite 1 point, a comment 3, a
+letters, numbers, spaces, dots, dashes or underscores, folded to NFKC, from one alphabet when
+Latin, Cyrillic or Greek letters are involved (so lookalikes can't pass), unique ignoring case and
+separators, with staff-like names reserved. Rank comes from contributions only (a favorite 1 point, a comment 3, a
 tempo or key vote 2), never from plays or YouTube data. A comment that three different people
 report is hidden until a moderator looks; authors see "Hidden after reports" on their own list.
 Account deletion removes comments, reports and the profile.

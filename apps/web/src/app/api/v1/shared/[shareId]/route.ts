@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { crateItems, toCrate } from "@/server/crates";
+import { publicCrateItems, toCrate } from "@/server/crates";
 import { db } from "@/server/db";
 import { json, notFound, route } from "@/server/http";
 
@@ -28,7 +28,7 @@ export const GET = route<Ctx>(async (_req, { params }) => {
         seed: crate.seed,
         itemCount: crate.itemCount,
       },
-      items: (await crateItems(pool, crate.id)).map((item) => ({ ...item, note: null })),
+      items: await publicCrateItems(pool, crate.id),
     },
     { headers: { "cache-control": "public, max-age=30, s-maxage=60" } },
   );

@@ -25,6 +25,10 @@ describe("safeNextPath", () => {
       "//evil.example",
       "/\\evil.example",
       "/\t/evil.example",
+      "/.//evil.example",
+      "/x/..//evil.example",
+      "/%2e//evil.example",
+      "/./%2e//evil.example",
       "https://evil.example/",
       "javascript:alert(1)",
     ]) {

@@ -1,6 +1,12 @@
 import "server-only";
 import type { Comment, MyComment } from "@app/api-client";
-import { contributionPoints, effectivePlan, type Rank, rankFor } from "@app/core";
+import {
+  contributionPoints,
+  effectivePlan,
+  normalizeDisplayName,
+  type Rank,
+  rankFor,
+} from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
 import { HttpError, notFound } from "./http";
 
@@ -21,14 +27,14 @@ export async function setDisplayName(db: Pool, userId: string, displayName: stri
     await db.query(
       `insert into profiles (user_id, display_name) values ($1, $2)
        on conflict (user_id) do update set display_name = excluded.display_name, updated_at = now()`,
-      [userId, displayName.trim()],
+      [userId, normalizeDisplayName(displayName)],
     );
   } catch (err) {
     if ((err as { code?: string }).code === "23505")
       throw new HttpError(409, "conflict", "That name is taken.");
     throw err;
   }
-  return { displayName: displayName.trim() };
+  return { displayName: normalizeDisplayName(displayName) };
 }
 
 /** Ranks for many users at once: favorites, comments and tempo/key votes. */

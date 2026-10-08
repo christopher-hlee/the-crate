@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { crateItems, toCrate } from "@/server/crates";
+import { publicCrateItems, toCrate } from "@/server/crates";
 import { db } from "@/server/db";
 import { SharedCrateView } from "./SharedCrateView";
 
@@ -18,7 +18,7 @@ async function load(params: Props["params"]) {
   );
   if (!res.rows[0]) notFound();
   const crate = toCrate(res.rows[0]);
-  return { shareId, crate, items: await crateItems(pool, crate.id) };
+  return { shareId, crate, items: await publicCrateItems(pool, crate.id) };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

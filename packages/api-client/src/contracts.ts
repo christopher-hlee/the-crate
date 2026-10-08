@@ -8,6 +8,7 @@ import {
   isRecordKey,
   isVideoId,
   MAX_CHOPS,
+  normalizeDisplayName,
   PLANS,
   REPORTABLE_PLAYER_ERRORS,
   RIGHTS_BASES,
@@ -496,7 +497,7 @@ export const SaveFilterRequestSchema = z.object({
 export const ProfileRequestSchema = z.object({
   displayName: z
     .string()
-    .trim()
+    .transform(normalizeDisplayName)
     .refine((v) => displayNameProblem(v) === null, { message: "Choose a different display name" }),
 });
 export const ProfileResponseSchema = z.object({ displayName: z.string() });
