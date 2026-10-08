@@ -129,7 +129,11 @@ export function Player({
     currentRef.current = req.videoId;
     playedRef.current = { seconds: 0, logged: false };
     const args = { videoId: req.videoId, startSeconds: req.startSeconds ?? 0 };
-    if (req.play && visibleRef.current > AUTOPLAY_VISIBLE_RATIO) player.loadVideoById(args);
+    // A hidden tab counts as not visible: browsers stop intersection updates for hidden pages,
+    // so the last ratio would otherwise let an auto-advance start playing in the background.
+    const visible =
+      document.visibilityState === "visible" && visibleRef.current > AUTOPLAY_VISIBLE_RATIO;
+    if (req.play && visible) player.loadVideoById(args);
     else player.cueVideoById(args);
   };
 

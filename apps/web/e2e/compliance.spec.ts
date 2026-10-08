@@ -122,3 +122,21 @@ test("an unplayable video is reported and skipped", async ({ page }) => {
   await expect.poll(async () => (await ytCalls(page)).at(-1)?.videoId).not.toBe(before);
   await expect(page.getByRole("status")).toContainText("skipped");
 });
+
+test("a hidden tab never autoplays the next record when a video ends", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("record-panel")).toBeVisible();
+  await page.getByTestId("shuffle").click();
+  await expect.poll(async () => (await ytCalls(page)).at(-1)?.fn).toBe("loadVideoById");
+  const before = (await ytCalls(page)).length;
+  // Hide the page, then let the video end: autoplay-next must only cue the next pick.
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    (window as unknown as { __yt: { players: { _set(s: number): void }[] } }).__yt.players[0]?._set(
+      0,
+    );
+  });
+  await expect.poll(async () => (await ytCalls(page)).length).toBeGreaterThan(before);
+  expect((await ytCalls(page)).at(-1)?.fn).toBe("cueVideoById");
+});
