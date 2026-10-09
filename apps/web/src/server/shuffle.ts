@@ -19,7 +19,15 @@ import {
 } from "@app/db";
 import { cacheGet, cacheSet } from "./cache";
 
-export function toPick(row: PickRow, thumbnailUrl: string | null): ShufflePick {
+export type VideoFacts = {
+  thumbnailUrl: string | null;
+  channel: ShufflePick["channel"];
+  favorited: boolean;
+};
+
+const NO_FACTS: VideoFacts = { thumbnailUrl: null, channel: null, favorited: false };
+
+export function toPick(row: PickRow, facts: VideoFacts = NO_FACTS): ShufflePick {
   return {
     recordKey: row.record_key,
     videoId: row.video_id,
@@ -46,17 +54,40 @@ export function toPick(row: PickRow, thumbnailUrl: string | null): ShufflePick {
             source: row.tempo_source ?? "unknown",
           }
         : null,
-    thumbnailUrl,
+    thumbnailUrl: facts.thumbnailUrl,
+    channel: facts.channel,
+    favorited: facts.favorited,
   };
 }
 
-async function withThumbnail(db: Queryable, row: PickRow | undefined): Promise<ShufflePick | null> {
+/** The pick's YouTube facts (thumbnail, channel; refreshed within 30 days) and favorite state. */
+async function withFacts(
+  db: Queryable,
+  row: PickRow | undefined,
+  userId: string | null,
+): Promise<ShufflePick | null> {
   if (!row) return null;
-  const t = await db.query<{ thumbnail_url: string | null }>(
-    "select thumbnail_url from yt_videos where video_id = $1",
-    [row.video_id],
+  const t = await db.query<{
+    thumbnail_url: string | null;
+    channel_id: string | null;
+    channel_title: string | null;
+    favorited: boolean;
+  }>(
+    `select y.thumbnail_url, y.channel_id, y.channel_title,
+            ($2::uuid is not null and exists (select 1 from favorites f where f.user_id = $2::uuid
+               and f.record_key = $3 and f.video_id = $1)) as favorited
+       from (select $1::text as video_id) v left join yt_videos y on y.video_id = v.video_id`,
+    [row.video_id, userId, row.record_key],
   );
-  return toPick(row, t.rows[0]?.thumbnail_url ?? null);
+  const f = t.rows[0];
+  return toPick(row, {
+    thumbnailUrl: f?.thumbnail_url ?? null,
+    channel:
+      f?.channel_id && f.channel_title
+        ? { id: f.channel_id, title: f.channel_title, topic: f.channel_title.endsWith(" - Topic") }
+        : null,
+    favorited: f?.favorited ?? false,
+  });
 }
 
 /**
@@ -98,7 +129,7 @@ export async function candidateList(
 
 export type PickOptions = {
   filters: Filters;
-  exclusions: { session: readonly string[]; seen: readonly string[] };
+  exclusions: { session: readonly string[]; seen: readonly string[]; repeats?: boolean };
   userId: string | null;
   viewerCountry: string | null;
   threshold: number;
@@ -107,20 +138,30 @@ export type PickOptions = {
 
 export async function pickNext(db: Queryable, o: PickOptions): Promise<ShuffleResponse> {
   const random = o.random ?? Math.random;
+  // With repeats on, only this session's records are skipped, not everything heard before.
+  const repeats = o.exclusions.repeats === true;
+  // "More from this release" scopes the shuffle to records this session has already shown
+  // (the one on screen, at least), so those can't also be skipped as session records.
+  const scoped = new Set(o.filters.recordKeys ?? []);
+  const sessionKeys = o.exclusions.session.filter((k) => !scoped.has(k));
+  // `seen` is the client's own list of videos to skip, honoured for everyone: a signed-out
+  // user's seen list, or the video on screen. Clients leave their seen list out with repeats
+  // on; signed-in users' history is skipped here unless repeats are on.
+  const seenIds = o.exclusions.seen;
   const ex: Exclusions = {
-    sessionRecordKeys: o.exclusions.session,
-    clientSeenIds: o.userId ? [] : o.exclusions.seen,
-    userId: o.userId,
+    sessionRecordKeys: sessionKeys,
+    clientSeenIds: seenIds,
+    userId: repeats ? null : o.userId,
     viewerCountry: o.viewerCountry,
   };
 
   if (await isNarrow(db, o.filters, o.threshold)) {
-    const session = new Set(o.exclusions.session);
-    const seen = new Set(o.exclusions.seen);
+    const session = new Set(sessionKeys);
+    const seen = new Set(seenIds);
     let candidates = (await candidateList(db, o.filters, o.threshold, o.viewerCountry)).filter(
       ([rk, vid]) => !session.has(rk) && !seen.has(vid),
     );
-    if (o.userId && candidates.length > 0) {
+    if (o.userId && !repeats && candidates.length > 0) {
       const played = await db.query<{ video_id: string }>(
         "select distinct video_id from history where user_id = $1 and video_id = any($2::text[])",
         [o.userId, candidates.map(([, v]) => v)],
@@ -134,7 +175,7 @@ export async function pickNext(db: Queryable, o: PickOptions): Promise<ShuffleRe
       const [rk, vid] = candidates[i] as [string, string];
       const q = buildPickByKeyQuery(rk, vid);
       const row = (await db.query<PickRow>(q.text, q.values)).rows[0];
-      if (row) return { pick: await withThumbnail(db, row), via: "list" };
+      if (row) return { pick: await withFacts(db, row, o.userId), via: "list" };
       candidates.splice(i, 1);
     }
     return { pick: null, via: "list" };
@@ -147,5 +188,5 @@ export async function pickNext(db: Queryable, o: PickOptions): Promise<ShuffleRe
     q = buildPickQuery(o.filters, { ...ex, r: 0 });
     row = (await db.query<PickRow>(q.text, q.values)).rows[0];
   }
-  return { pick: await withThumbnail(db, row), via: "seek" };
+  return { pick: await withFacts(db, row, o.userId), via: "seek" };
 }

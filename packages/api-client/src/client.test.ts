@@ -18,6 +18,8 @@ const pick = {
   },
   tempo: null,
   thumbnailUrl: null,
+  channel: null,
+  favorited: false,
 };
 
 function fakeFetch(

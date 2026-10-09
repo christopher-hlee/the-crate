@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ItemListPlayer } from "@/components/ItemListPlayer";
-import { crateItems, toCrate } from "@/server/crates";
+import { publicCrateItems, toCrate } from "@/server/crates";
 import { db } from "@/server/db";
+import { SharedCrateView } from "./SharedCrateView";
 
 type Props = { params: Promise<{ shareId: string }> };
 
@@ -18,7 +18,7 @@ async function load(params: Props["params"]) {
   );
   if (!res.rows[0]) notFound();
   const crate = toCrate(res.rows[0]);
-  return { crate, items: await crateItems(pool, crate.id) };
+  return { shareId, crate, items: await publicCrateItems(pool, crate.id) };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SharedCratePage({ params }: Props) {
-  const { crate, items } = await load(params);
+  const { shareId, crate, items } = await load(params);
   return (
     <div className="space-y-4">
       <div>
@@ -35,7 +35,11 @@ export default async function SharedCratePage({ params }: Props) {
         <h1 className="text-2xl font-semibold">{crate.name}</h1>
         <p className="text-sm text-ink-2">{crate.itemCount} records</p>
       </div>
-      <ItemListPlayer items={items} emptyText="This crate is empty." />
+      <SharedCrateView
+        shareId={shareId}
+        items={items}
+        seeded={crate.seed !== null && crate.filters !== null}
+      />
     </div>
   );
 }

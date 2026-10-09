@@ -93,33 +93,44 @@ describe("archive", () => {
     expect(await saveChops(t.pool, FREE, ready, [5, 2, 2.004, 11, -1])).toEqual([2, 5]);
   });
 
-  it("adds archive recordings to crates once, within the Free crate size", async () => {
+  it("adds archive recordings to Pro crates once, within the crate size", async () => {
     const crate = (
       await t.pool.query<{ id: string }>(
         "insert into crates (user_id, name) values ($1, 'Mix') returning id",
+        [PRO],
+      )
+    ).rows[0]?.id as string;
+    expect((await addCrateAsset(t.pool, ORIGIN, PRO, crate, ready)).assets).toHaveLength(1);
+    expect((await addCrateAsset(t.pool, ORIGIN, PRO, crate, ready)).assets).toHaveLength(1);
+    await expect(addCrateAsset(t.pool, ORIGIN, FREE, crate, ready)).rejects.toMatchObject({
+      code: "not_found",
+    });
+
+    // Free accounts have no crates to add to; a lapsed Pro crate can't grow.
+    const lapsed = (
+      await t.pool.query<{ id: string }>(
+        "insert into crates (user_id, name) values ($1, 'Old') returning id",
         [FREE],
       )
     ).rows[0]?.id as string;
-    expect((await addCrateAsset(t.pool, ORIGIN, FREE, crate, ready)).assets).toHaveLength(1);
-    expect((await addCrateAsset(t.pool, ORIGIN, FREE, crate, ready)).assets).toHaveLength(1);
-    await expect(addCrateAsset(t.pool, ORIGIN, PRO, crate, ready)).rejects.toMatchObject({
-      code: "not_found",
+    await expect(addCrateAsset(t.pool, ORIGIN, FREE, lapsed, ready)).rejects.toMatchObject({
+      code: "pro_required",
     });
 
     const full = (
       await t.pool.query<{ id: string }>(
         "insert into crates (user_id, name) values ($1, 'Full') returning id",
-        [FREE],
+        [PRO],
       )
     ).rows[0]?.id as string;
-    for (let i = 0; i < 50; i++)
-      await t.pool.query(
-        "insert into crate_items (crate_id, record_key, video_id, position) values ($1, $2, 'abcdefghijk', $3)",
-        [full, `r:${i + 1}`, i],
-      );
-    await expect(addCrateAsset(t.pool, ORIGIN, FREE, full, ready)).rejects.toMatchObject({
+    await t.pool.query(
+      `insert into crate_items (crate_id, record_key, video_id, position)
+       select $1, 'r:' || g, 'abcdefghijk', g from generate_series(1, 1000) g`,
+      [full],
+    );
+    await expect(addCrateAsset(t.pool, ORIGIN, PRO, full, ready)).rejects.toMatchObject({
       code: "limit_reached",
     });
-    expect((await crateAssets(t.pool, ORIGIN, FREE, full)).assets).toEqual([]);
+    expect((await crateAssets(t.pool, ORIGIN, PRO, full)).assets).toEqual([]);
   });
 });

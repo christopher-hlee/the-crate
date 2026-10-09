@@ -1,7 +1,13 @@
 "use client";
 
 import { ApiError, type Crate } from "@app/api-client";
-import { type Filters, newSeed } from "@app/core";
+import {
+  CHANNEL_SCOPE_NOT_SAVED,
+  type Filters,
+  hasChannelScope,
+  newSeed,
+  PLAN_LIMITS,
+} from "@app/core";
 import { Check, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -46,10 +52,25 @@ export function SaveToCrate({ item, seedFilters, open, onClose, onSaved }: Props
         className="rounded-md border border-line bg-surface p-3 text-sm"
         data-testid="save-panel"
       >
-        <Link href="/login" className="text-accent underline">
+        <Link href="/login?next=/" className="text-accent underline">
           Sign in
         </Link>{" "}
-        to save records to crates.
+        to keep favorites, or go Pro for crates.
+      </div>
+    );
+  }
+  if (me.limits.maxCrates === 0) {
+    return (
+      <div
+        className="rounded-md border border-line bg-surface p-3 text-sm"
+        data-testid="save-panel"
+      >
+        Crates are a Pro tool: up to {PLAN_LIMITS.pro.maxCrates} crates of{" "}
+        {PLAN_LIMITS.pro.maxItemsPerCrate?.toLocaleString("en-US")} records.{" "}
+        <Link href="/account" className="text-accent underline">
+          Go Pro
+        </Link>
+        . Favorites are free: press the heart or F to keep this record.
       </div>
     );
   }
@@ -74,7 +95,7 @@ export function SaveToCrate({ item, seedFilters, open, onClose, onSaved }: Props
     setError(null);
     try {
       const crate = await api.createCrate(
-        seeded && seedFilters
+        seeded && seedFilters && !hasChannelScope(seedFilters)
           ? { name: name.trim(), filters: seedFilters, seed: newSeed() }
           : { name: name.trim() },
       );
@@ -133,12 +154,15 @@ export function SaveToCrate({ item, seedFilters, open, onClose, onSaved }: Props
           <Plus size={14} aria-hidden /> Create
         </Button>
       </form>
-      {seedFilters && (
-        <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
-          <input type="checkbox" checked={seeded} onChange={(e) => setSeeded(e.target.checked)} />
-          Seed the new crate with these filters, for a shareable order anyone can replay
-        </label>
-      )}
+      {seedFilters &&
+        (hasChannelScope(seedFilters) ? (
+          <p className="text-xs text-ink-2">{CHANNEL_SCOPE_NOT_SAVED}</p>
+        ) : (
+          <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
+            <input type="checkbox" checked={seeded} onChange={(e) => setSeeded(e.target.checked)} />
+            Seed the new crate with these filters, for a shareable order anyone can replay
+          </label>
+        ))}
       {error && <p className="text-warn">{error}</p>}
     </div>
   );

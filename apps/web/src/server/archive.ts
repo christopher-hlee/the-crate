@@ -248,10 +248,9 @@ export async function addCrateAsset(
             + (select count(*) from crate_assets where crate_id = $1)::int as n`,
       [crateId],
     );
+    if (limitsFor(plan).maxItemsPerCrate === 0) throw proRequired("Crates", true);
     if (!canAddCrateItems(plan, count.rows[0]?.n ?? 0))
-      throw limitReached(
-        `Free crates hold up to ${limitsFor(plan).maxItemsPerCrate} records. Go Pro for unlimited crates.`,
-      );
+      throw limitReached(`A crate holds up to ${limitsFor(plan).maxItemsPerCrate} records.`);
     await client.query(
       `insert into crate_assets (crate_id, asset_id, position)
        values ($1, $2, coalesce((select max(position) + 1 from crate_assets where crate_id = $1), 0))`,

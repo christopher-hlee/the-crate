@@ -1,7 +1,19 @@
 "use client";
 
-import type { CountResponse, StylesResponse } from "@app/api-client";
-import { type Filters, normalizeFilters } from "@app/core";
+import {
+  ApiError,
+  type CountResponse,
+  type SavedFilter,
+  type StylesResponse,
+} from "@app/api-client";
+import {
+  CHANNEL_SCOPE_NOT_SAVED,
+  type Filters,
+  hasChannelScope,
+  isEmptyFilter,
+  normalizeFilters,
+  proFiltersUsed,
+} from "@app/core";
 import { Lock, X } from "lucide-react";
 import Link from "next/link";
 import { type RefObject, useEffect, useMemo, useState } from "react";
@@ -16,8 +28,13 @@ type Props = {
   onChange: (next: Filters) => void;
   census: StylesResponse | null;
   isPro: boolean;
+  signedIn: boolean;
   searchRef: RefObject<HTMLInputElement | null>;
 };
+
+/** What Pro adds to the filters; one place for the copy. */
+export const PRO_FILTERS_BLURB =
+  'Keywords, topic channels, deep cuts, format notes and "more from" scopes are Pro tools.';
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -86,10 +103,11 @@ function Histogram({
   );
 }
 
-export function FilterDrawer({ filters, onChange, census, isPro, searchRef }: Props) {
+export function FilterDrawer({ filters, onChange, census, isPro, signedIn, searchRef }: Props) {
   const [query, setQuery] = useState("");
   const [countryQuery, setCountryQuery] = useState("");
   const [count, setCount] = useState<CountResponse | null>(null);
+  const [countFailed, setCountFailed] = useState(false);
   const set = (patch: Partial<Filters>) => onChange(normalizeFilters({ ...filters, ...patch }));
 
   // Live match count for the combined filters, debounced.
@@ -100,8 +118,16 @@ export function FilterDrawer({ filters, onChange, census, isPro, searchRef }: Pr
     const t = setTimeout(() => {
       api
         .count(filters)
-        .then((c) => !cancelled && setCount(c))
-        .catch(() => !cancelled && setCount(null));
+        .then((c) => {
+          if (cancelled) return;
+          setCount(c);
+          setCountFailed(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setCount(null);
+          setCountFailed(true);
+        });
     }, 350);
     return () => {
       cancelled = true;
@@ -165,6 +191,8 @@ export function FilterDrawer({ filters, onChange, census, isPro, searchRef }: Pr
             <>
               <span className="font-semibold text-ink">{count.display}</span> matches
             </>
+          ) : countFailed ? (
+            "Couldn't count matches"
           ) : (
             "Counting…"
           )}
@@ -348,12 +376,122 @@ export function FilterDrawer({ filters, onChange, census, isPro, searchRef }: Pr
         </div>
       </Section>
 
-      <ProFilters
-        filters={filters}
-        set={set}
-        isPro={isPro}
-        coverage={count?.tempoCoverage ?? null}
-      />
+      <TempoKeyViews filters={filters} set={set} coverage={count?.tempoCoverage ?? null} />
+
+      <ScopeChips filters={filters} set={set} />
+
+      <ProFilters filters={filters} set={set} isPro={isPro} />
+
+      {signedIn && <SavedFilters filters={filters} onApply={onChange} isPro={isPro} />}
+    </div>
+  );
+}
+
+function TempoKeyViews({
+  filters,
+  set,
+  coverage,
+}: {
+  filters: Filters;
+  set: (p: Partial<Filters>) => void;
+  coverage: number | null;
+}) {
+  return (
+    <Section title="Tempo, key and views">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="space-y-1">
+          <span className="text-xs text-ink-2">BPM from</span>
+          <Input
+            type="number"
+            min={20}
+            max={400}
+            value={filters.bpmFrom ?? ""}
+            onChange={(e) => set({ bpmFrom: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs text-ink-2">BPM to</span>
+          <Input
+            type="number"
+            min={20}
+            max={400}
+            value={filters.bpmTo ?? ""}
+            onChange={(e) => set({ bpmTo: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </label>
+      </div>
+      <label className="inline-flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          className="accent-[var(--accent)]"
+          checked={filters.halfDouble ?? false}
+          onChange={(e) => set({ halfDouble: e.target.checked || undefined })}
+        />
+        Include half and double time
+      </label>
+      {coverage !== null && (
+        <p className="text-xs text-ink-2" data-testid="tempo-coverage">
+          Tempo known for {Math.round(coverage * 100)}% of these matches.
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="space-y-1">
+          <span className="text-xs text-ink-2">Key (Camelot)</span>
+          <select
+            className="h-10 w-full rounded-md border border-line bg-surface px-2"
+            value={filters.key ?? ""}
+            onChange={(e) => set({ key: (e.target.value || undefined) as Filters["key"] })}
+          >
+            <option value="">Any</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).flatMap((n) =>
+              ["A", "B"].map((l) => (
+                <option key={`${n}${l}`} value={`${n}${l}`}>
+                  {n}
+                  {l}
+                </option>
+              )),
+            )}
+          </select>
+        </label>
+        <label className="inline-flex items-end gap-1.5 pb-2">
+          <input
+            type="checkbox"
+            className="accent-[var(--accent)]"
+            checked={filters.compatibleKeys ?? false}
+            onChange={(e) => set({ compatibleKeys: e.target.checked || undefined })}
+          />
+          Compatible keys
+        </label>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-xs text-ink-2">Max YouTube views</span>
+        <Input
+          type="number"
+          min={0}
+          value={filters.maxViews ?? ""}
+          onChange={(e) => set({ maxViews: e.target.value ? Number(e.target.value) : undefined })}
+        />
+      </label>
+    </Section>
+  );
+}
+
+/** Active "more from" scopes. Removable on any plan, so a Free user is never stuck in one. */
+function ScopeChips({ filters, set }: { filters: Filters; set: (p: Partial<Filters>) => void }) {
+  const chips: { label: string; clear: Partial<Filters> }[] = [];
+  if (filters.recordKeys) chips.push({ label: "This release", clear: { recordKeys: undefined } });
+  if (filters.channelIds) chips.push({ label: "This channel", clear: { channelIds: undefined } });
+  if (filters.labelIds) chips.push({ label: "This label", clear: { labelIds: undefined } });
+  if (filters.artistIds) chips.push({ label: "This artist", clear: { artistIds: undefined } });
+  if (chips.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 text-xs" data-testid="scope-chips">
+      <span className="self-center text-ink-2">More from:</span>
+      {chips.map((c) => (
+        <Button key={c.label} size="sm" variant="outline" onClick={() => set(c.clear)}>
+          {c.label} <X size={12} aria-label={`Remove ${c.label} scope`} />
+        </Button>
+      ))}
     </div>
   );
 }
@@ -362,14 +500,15 @@ function ProFilters({
   filters,
   set,
   isPro,
-  coverage,
 }: {
   filters: Filters;
   set: (p: Partial<Filters>) => void;
   isPro: boolean;
-  coverage: number | null;
 }) {
   const disabled = !isPro;
+  const [q, setQ] = useState(filters.q ?? "");
+  useEffect(() => setQ(filters.q ?? ""), [filters.q]);
+  const applyQ = () => set({ q: q.trim().length >= 2 ? q : undefined });
   return (
     <Section
       title="Pro filters"
@@ -389,105 +528,53 @@ function ProFilters({
         className={cn("space-y-3", disabled && "opacity-60")}
         aria-label="Pro filters"
       >
-        {!isPro && (
-          <p className="text-xs text-ink-2">
-            Tempo, key, views, deep-cut, format notes and label or artist scopes are Pro tools.
-            Listening stays free.
+        {!isPro && <p className="text-xs text-ink-2">{PRO_FILTERS_BLURB} Listening stays free.</p>}
+        <form
+          className="space-y-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            applyQ();
+          }}
+        >
+          <label className="space-y-1" htmlFor="keywords">
+            <span className="text-xs text-ink-2">Keywords</span>
+          </label>
+          <Input
+            id="keywords"
+            type="search"
+            placeholder="drum break, psych, Latin…"
+            value={q}
+            maxLength={100}
+            onChange={(e) => setQ(e.target.value)}
+            onBlur={applyQ}
+            aria-describedby="keywords-help"
+          />
+          <p id="keywords-help" className="text-xs text-ink-2">
+            Matches record, artist, label, track and style names, and the video's title and tags.
           </p>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <label className="space-y-1">
-            <span className="text-xs text-ink-2">BPM from</span>
-            <Input
-              type="number"
-              min={20}
-              max={400}
-              value={filters.bpmFrom ?? ""}
-              onChange={(e) =>
-                set({ bpmFrom: e.target.value ? Number(e.target.value) : undefined })
-              }
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs text-ink-2">BPM to</span>
-            <Input
-              type="number"
-              min={20}
-              max={400}
-              value={filters.bpmTo ?? ""}
-              onChange={(e) => set({ bpmTo: e.target.value ? Number(e.target.value) : undefined })}
-            />
-          </label>
-        </div>
+        </form>
         <label className="inline-flex items-center gap-1.5">
           <input
             type="checkbox"
             className="accent-[var(--accent)]"
-            checked={filters.halfDouble ?? false}
-            onChange={(e) => set({ halfDouble: e.target.checked || undefined })}
+            checked={filters.topicOnly ?? false}
+            onChange={(e) => set({ topicOnly: e.target.checked || undefined })}
           />
-          Include half and double time
+          Topic channels only (official audio uploads)
         </label>
-        {coverage !== null && (
-          <p className="text-xs text-ink-2" data-testid="tempo-coverage">
-            Tempo known for {Math.round(coverage * 100)}% of these matches.
-          </p>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <label className="space-y-1">
-            <span className="text-xs text-ink-2">Key (Camelot)</span>
-            <select
-              className="h-10 w-full rounded-md border border-line bg-surface px-2"
-              value={filters.key ?? ""}
-              onChange={(e) => set({ key: (e.target.value || undefined) as Filters["key"] })}
-            >
-              <option value="">Any</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).flatMap((n) =>
-                ["A", "B"].map((l) => (
-                  <option key={`${n}${l}`} value={`${n}${l}`}>
-                    {n}
-                    {l}
-                  </option>
-                )),
-              )}
-            </select>
-          </label>
-          <label className="inline-flex items-end gap-1.5 pb-2">
-            <input
-              type="checkbox"
-              className="accent-[var(--accent)]"
-              checked={filters.compatibleKeys ?? false}
-              onChange={(e) => set({ compatibleKeys: e.target.checked || undefined })}
-            />
-            Compatible keys
-          </label>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="space-y-1">
-            <span className="text-xs text-ink-2">Max YouTube views</span>
-            <Input
-              type="number"
-              min={0}
-              value={filters.maxViews ?? ""}
-              onChange={(e) =>
-                set({ maxViews: e.target.value ? Number(e.target.value) : undefined })
-              }
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs text-ink-2">
-              Deep cut ≥ {Math.round((filters.deepCutMin ?? 0) * 100)}%
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              className="w-full accent-[var(--accent)]"
-              value={Math.round((filters.deepCutMin ?? 0) * 100)}
-              onChange={(e) => set({ deepCutMin: Number(e.target.value) / 100 || undefined })}
-            />
-          </label>
-        </div>
+        <label className="block space-y-1">
+          <span className="text-xs text-ink-2">
+            Deep cut ≥ {Math.round((filters.deepCutMin ?? 0) * 100)}%
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            className="w-full accent-[var(--accent)]"
+            value={Math.round((filters.deepCutMin ?? 0) * 100)}
+            onChange={(e) => set({ deepCutMin: Number(e.target.value) / 100 || undefined })}
+          />
+        </label>
         <div className="space-y-1">
           <span className="text-xs text-ink-2">Format notes</span>
           <div className="flex flex-wrap gap-3">
@@ -506,21 +593,127 @@ function ProFilters({
             ))}
           </div>
         </div>
-        {(filters.labelIds || filters.artistIds) && (
-          <div className="flex flex-wrap gap-2 text-xs">
-            {filters.labelIds && (
-              <Button size="sm" variant="outline" onClick={() => set({ labelIds: undefined })}>
-                Label scope on <X size={12} />
-              </Button>
-            )}
-            {filters.artistIds && (
-              <Button size="sm" variant="outline" onClick={() => set({ artistIds: undefined })}>
-                Artist scope on <X size={12} />
-              </Button>
-            )}
-          </div>
-        )}
+        <p className="text-xs text-ink-2">
+          "More from this release, channel, label or artist" lives on the record panel.
+        </p>
       </fieldset>
+    </Section>
+  );
+}
+
+function SavedFilters({
+  filters,
+  onApply,
+  isPro,
+}: {
+  filters: Filters;
+  onApply: (f: Filters) => void;
+  isPro: boolean;
+}) {
+  const [items, setItems] = useState<SavedFilter[] | null>(null);
+  const [max, setMax] = useState(200);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .savedFilters()
+      .then((r) => {
+        setItems(r.items);
+        setMax(r.max);
+      })
+      .catch(() => setItems([]));
+  }, []);
+  const empty = isEmptyFilter(filters);
+  // A channel scope is YouTube data we don't keep, so a set with one can't be saved.
+  const channel = hasChannelScope(filters);
+  const save = async () => {
+    setError(null);
+    try {
+      const saved = await api.saveFilter({ name: name.trim(), filters });
+      setItems((prev) =>
+        [...(prev ?? []).filter((i) => i.name !== saved.name), saved].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      setName("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save these filters.");
+    }
+  };
+  return (
+    <Section
+      title="Saved filters"
+      aside={
+        items && (
+          <span className="tabular-nums text-xs text-ink-2">
+            {items.length}/{max}
+          </span>
+        )
+      }
+    >
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim() && !empty && !channel) void save();
+        }}
+      >
+        <Input
+          placeholder={empty ? "Set some filters first" : "Name these filters"}
+          value={name}
+          maxLength={60}
+          disabled={empty || channel}
+          onChange={(e) => setName(e.target.value)}
+          aria-label="Saved filter name"
+        />
+        <Button type="submit" size="sm" disabled={empty || channel || !name.trim()}>
+          Save
+        </Button>
+      </form>
+      {channel && <p className="text-xs text-ink-2">{CHANNEL_SCOPE_NOT_SAVED}</p>}
+      {error && (
+        <p role="status" className="text-xs text-warn">
+          {error}
+        </p>
+      )}
+      <ul className="space-y-1" data-testid="saved-filters">
+        {items?.map((it) => {
+          const locked = !isPro && proFiltersUsed(it.filters).length > 0;
+          return (
+            <li key={it.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                className={cn("flex-1 truncate text-left underline", locked && "text-ink-2")}
+                onClick={() =>
+                  locked ? setError("That preset uses Pro filters.") : onApply(it.filters)
+                }
+                title={locked ? "Uses Pro filters" : "Apply"}
+              >
+                {locked && <Lock size={12} className="mr-1 inline" aria-hidden />}
+                {it.name}
+              </button>
+              <button
+                type="button"
+                className="text-ink-2 hover:text-ink"
+                aria-label={`Delete ${it.name}`}
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    await api.deleteSavedFilter(it.id);
+                    // Gone from the list only once the server has deleted it.
+                    setItems((prev) => prev?.filter((x) => x.id !== it.id) ?? null);
+                  } catch (err) {
+                    setError(err instanceof ApiError ? err.message : `Couldn't delete ${it.name}.`);
+                  }
+                }}
+              >
+                <X size={14} />
+              </button>
+            </li>
+          );
+        })}
+        {items?.length === 0 && <li className="text-xs text-ink-2">No saved filters yet.</li>}
+      </ul>
     </Section>
   );
 }

@@ -8,8 +8,12 @@ import {
   AssetDownloadResponseSchema,
   AssetListResponseSchema,
   AssetSchema,
+  BlockedCommenterSchema,
+  BlockedCommentersResponseSchema,
   ChangelogResponseSchema,
   ChopsSchema,
+  CommentSchema,
+  CommentsResponseSchema,
   CountResponseSchema,
   CrateAssetsResponseSchema,
   CrateDetailSchema,
@@ -20,23 +24,33 @@ import {
   DailyResponseSchema,
   DeletedResponseSchema,
   type ErrorCode,
+  FavoriteStatusSchema,
+  FavoritesResponseSchema,
+  ForYouResponseSchema,
   HistoryResponseSchema,
   LinkSuggestionResponseSchema,
   MeResponseSchema,
+  MyCommentsResponseSchema,
   NoteSchema,
   NotesResponseSchema,
   OkResponseSchema,
   type PlayRequestSchema,
   PlayResponseSchema,
+  ProfileResponseSchema,
   RecordSchema,
   RedirectResponseSchema,
+  SavedFilterSchema,
+  SavedFiltersResponseSchema,
+  type SaveFilterRequestSchema,
   SequenceResponseSchema,
   SharedCrateSchema,
   ShareResponseSchema,
   ShuffleResponseSchema,
   StylesResponseSchema,
   type TempoVoteRequestSchema,
+  TrendingResponseSchema,
   type UpdateCrateRequestSchema,
+  type UpdateNoteRequestSchema,
 } from "./contracts";
 
 export class ApiError extends Error {
@@ -109,11 +123,12 @@ export function createApiClient(options: ApiClientOptions) {
   return {
     shuffle(
       filters: Filters,
-      exclusions: { session?: readonly string[]; seen?: readonly string[] } = {},
+      exclusions: { session?: readonly string[]; seen?: readonly string[]; repeats?: boolean } = {},
     ) {
       const pairs = filterPairs(filters);
       for (const k of exclusions.session ?? []) pairs.push(["session", k]);
       for (const v of exclusions.seen ?? []) pairs.push(["seen", v]);
+      if (exclusions.repeats) pairs.push(["repeats", "1"]);
       return request(ShuffleResponseSchema, "GET", `/shuffle${encodeQuery(pairs)}`);
     },
     record(recordKey: string) {
@@ -227,6 +242,112 @@ export function createApiClient(options: ApiClientOptions) {
     },
     portal() {
       return request(RedirectResponseSchema, "POST", "/billing/portal");
+    },
+    favorites(cursor?: string | null) {
+      return request(
+        FavoritesResponseSchema,
+        "GET",
+        `/favorites${encodeQuery(cursor ? [["cursor", cursor]] : [])}`,
+      );
+    },
+    favoriteStatus(ref: { recordKey: string; videoId: string }) {
+      const q = encodeQuery([
+        ["recordKey", ref.recordKey],
+        ["videoId", ref.videoId],
+      ]);
+      return request(FavoriteStatusSchema, "GET", `/favorites/status${q}`);
+    },
+    addFavorite(ref: { recordKey: string; videoId: string }) {
+      return request(FavoriteStatusSchema, "POST", "/favorites", ref);
+    },
+    removeFavorite(ref: { recordKey: string; videoId: string }) {
+      const q = encodeQuery([
+        ["recordKey", ref.recordKey],
+        ["videoId", ref.videoId],
+      ]);
+      return request(FavoriteStatusSchema, "DELETE", `/favorites${q}`);
+    },
+    setFavoriteNote(ref: { recordKey: string; videoId: string }, note: string | null) {
+      return request(OkResponseSchema, "PATCH", "/favorites", { ...ref, note });
+    },
+    setCrateItemNote(
+      crateId: string,
+      ref: { recordKey: string; videoId: string },
+      note: string | null,
+    ) {
+      return request(OkResponseSchema, "PUT", `/crates/${encodeURIComponent(crateId)}/items/note`, {
+        ...ref,
+        note,
+      });
+    },
+    savedFilters() {
+      return request(SavedFiltersResponseSchema, "GET", "/saved-filters");
+    },
+    saveFilter(body: z.input<typeof SaveFilterRequestSchema>) {
+      return request(SavedFilterSchema, "POST", "/saved-filters", body);
+    },
+    deleteSavedFilter(id: string) {
+      return request(DeletedResponseSchema, "DELETE", `/saved-filters/${encodeURIComponent(id)}`);
+    },
+    setDisplayName(displayName: string) {
+      return request(ProfileResponseSchema, "PUT", "/me/profile", { displayName });
+    },
+    comments(recordKey: string) {
+      return request(
+        CommentsResponseSchema,
+        "GET",
+        `/records/${encodeURIComponent(recordKey)}/comments`,
+      );
+    },
+    addComment(recordKey: string, body: string) {
+      return request(CommentSchema, "POST", `/records/${encodeURIComponent(recordKey)}/comments`, {
+        body,
+      });
+    },
+    deleteComment(id: string) {
+      return request(DeletedResponseSchema, "DELETE", `/comments/${encodeURIComponent(id)}`);
+    },
+    reportComment(id: string) {
+      return request(OkResponseSchema, "POST", `/comments/${encodeURIComponent(id)}/report`);
+    },
+    /** Blocks the author of a comment: their comments stop showing to this account. */
+    blockCommenter(commentId: string) {
+      return request(
+        BlockedCommenterSchema,
+        "POST",
+        `/comments/${encodeURIComponent(commentId)}/block`,
+      );
+    },
+    blockedCommenters() {
+      return request(BlockedCommentersResponseSchema, "GET", "/me/blocks");
+    },
+    unblockCommenter(blockId: string) {
+      return request(DeletedResponseSchema, "DELETE", `/me/blocks/${encodeURIComponent(blockId)}`);
+    },
+    updateNote(id: string, body: z.input<typeof UpdateNoteRequestSchema>) {
+      return request(OkResponseSchema, "PATCH", `/notes/${encodeURIComponent(id)}`, body);
+    },
+    deleteNote(id: string) {
+      return request(DeletedResponseSchema, "DELETE", `/notes/${encodeURIComponent(id)}`);
+    },
+    clearHistory() {
+      return request(DeletedResponseSchema, "DELETE", "/history");
+    },
+    sharedSequence(shareId: string, page = 0) {
+      return request(
+        SequenceResponseSchema,
+        "GET",
+        `/shared/${encodeURIComponent(shareId)}/sequence?page=${page}`,
+      );
+    },
+    forYou(page = 0) {
+      return request(ForYouResponseSchema, "GET", `/for-you?page=${page}`);
+    },
+    trending() {
+      return request(TrendingResponseSchema, "GET", "/trending");
+    },
+    myComments() {
+      return request(MyCommentsResponseSchema, "GET", "/me/comments");
     },
     assets(params: { q?: string; cursor?: string | null } = {}) {
       const pairs: Pairs = [];

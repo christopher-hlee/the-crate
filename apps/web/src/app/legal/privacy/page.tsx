@@ -1,5 +1,6 @@
 import { APP_NAME } from "@app/core";
 import type { Metadata } from "next";
+import { SupportEmail } from "@/components/SupportEmail";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -32,13 +33,33 @@ export default function PrivacyPage() {
       <h2 className="text-lg font-semibold">What we keep</h2>
       <ul className="list-inside list-disc space-y-1">
         <li>Your account: an ID and email address from our sign-in provider.</li>
-        <li>What you save: crates, notes, tempo and key votes, link suggestions.</li>
+        <li>
+          What you save: favorites, crates, saved filters, notes, tempo and key votes, link
+          suggestions.
+        </li>
+        <li>
+          What you post: your display name and comments, which anyone can read next to the record
+          (search engines included). Each comment shows your rank, worked out from how many
+          favorites, comments and tempo or key votes you have, and a Pro badge while you subscribe.
+          We also keep the comments you report; a comment several people report is hidden. The
+          commenters you block are kept so their comments stay out of your view; they aren&apos;t
+          told, and nobody else can see your list.
+        </li>
+        <li>
+          Counts without names: Trending shows how many people favorited a record this week, never
+          who.
+        </li>
         <li>
           History: the plays in your plan&apos;s window (50 on Free, 1,000 on Pro), used to keep
-          played records out of your shuffle.
+          played records out of your shuffle and, with your favorites, to pick the styles for For
+          you.
         </li>
         <li>
           Error reports when a video fails to play, and a hashed IP address for rate limiting.
+        </li>
+        <li>
+          Player settings (where a record starts, autoplay, hiding comments) stay in your
+          browser&apos;s storage.
         </li>
         <li>
           Subscription status from Stripe, the App Store or Google Play. We never see card details.
@@ -49,13 +70,17 @@ export default function PrivacyPage() {
         reaches us beyond the shuffle request that uses it.
       </p>
       <p>
-        YouTube data we store about videos (titles, durations, view counts, thumbnails,
-        availability) is refreshed or deleted within 30 days.
+        YouTube data we store about videos (titles, channels, tags, durations, view counts,
+        thumbnails, availability) is refreshed or deleted within 30 days.
       </p>
       <h2 className="text-lg font-semibold">Deleting your data</h2>
       <p>
         Delete your account from the Account page. Your data is removed within 7 days; most of it
         immediately.
+      </p>
+      <h2 className="text-lg font-semibold">Contact</h2>
+      <p>
+        Questions about your data or this policy: <SupportEmail />.
       </p>
     </article>
   );

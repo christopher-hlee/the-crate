@@ -3,10 +3,12 @@
 
 import {
   DATE_EVIDENCE_KINDS,
+  displayNameProblem,
   FiltersSchema,
   isRecordKey,
   isVideoId,
   MAX_CHOPS,
+  normalizeDisplayName,
   PLANS,
   REPORTABLE_PLAYER_ERRORS,
   RIGHTS_BASES,
@@ -65,6 +67,10 @@ export const ShufflePickSchema = z.object({
   tempo: TempoSchema.nullable(),
   /** YouTube's thumbnail (≥120×70), refreshed within 30 days; null when unknown. */
   thumbnailUrl: z.string().nullable(),
+  /** The uploading channel (YouTube data, refreshed within 30 days), for "more from this channel". */
+  channel: z.object({ id: z.string(), title: z.string(), topic: z.boolean() }).nullable(),
+  /** Whether the signed-in viewer has this record and video in their favorites. */
+  favorited: z.boolean(),
 });
 export type ShufflePick = z.infer<typeof ShufflePickSchema>;
 
@@ -79,6 +85,8 @@ export type ShuffleResponse = z.infer<typeof ShuffleResponseSchema>;
 export const ShuffleExclusionsSchema = z.object({
   session: z.array(RecordKeySchema).max(SHUFFLE_EXCLUDE_MAX).default([]),
   seen: z.array(VideoIdSchema).max(SHUFFLE_EXCLUDE_MAX).default([]),
+  /** Let records the viewer has already heard come round again (a player setting). */
+  repeats: z.boolean().default(false),
 });
 
 // ---------------------------------------------------------------------------- records
@@ -226,6 +234,7 @@ export const UpdateCrateRequestSchema = z
 
 export const CrateItemSchema = CatalogItemSchema.extend({
   position: z.number().int(),
+  note: z.string().nullable(),
   addedAt: Iso,
 });
 export type CrateItem = z.infer<typeof CrateItemSchema>;
@@ -285,6 +294,13 @@ export const CreateNoteRequestSchema = z.object({
   body: z.string().trim().min(1).max(2000),
 });
 
+export const UpdateNoteRequestSchema = z
+  .object({
+    body: z.string().trim().min(1).max(2000).optional(),
+    atSeconds: z.number().int().min(0).max(86_400).nullable().optional(),
+  })
+  .refine((v) => v.body !== undefined || v.atSeconds !== undefined, "Nothing to update");
+
 export const TempoVoteRequestSchema = z
   .object({
     releaseId: z.number().int().positive(),
@@ -335,12 +351,19 @@ export const MeResponseSchema = z.object({
   planSource: z.enum(["stripe", "app_store", "play_store"]).nullable(),
   expiresAt: Iso.nullable(),
   limits: LimitsSchema.extend({
+    maxFavorites: z.number().int(),
+    maxSavedFilters: z.number().int(),
     notes: z.boolean(),
+    maxNotes: z.number().int(),
     crateExport: z.boolean(),
     createShared: z.boolean(),
     proFilters: z.boolean(),
     tempoVotes: z.boolean(),
+    youtubePlaylist: z.boolean(),
+    comments: z.boolean(),
   }),
+  profile: z.object({ displayName: z.string() }).nullable(),
+  rank: z.object({ level: z.number().int(), title: z.string(), points: z.number().int() }),
 });
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
@@ -430,3 +453,110 @@ export const CrateAssetsResponseSchema = z.object({
   assets: z.array(AssetSchema.extend({ position: z.number().int(), addedAt: Iso })),
 });
 export const CrateAssetRequestSchema = z.object({ assetId: UuidSchema });
+
+// ---------------------------------------------------------------------------- favorites
+
+export const FavoriteItemSchema = CatalogItemSchema.extend({
+  note: z.string().nullable(),
+  addedAt: Iso,
+});
+export type FavoriteItem = z.infer<typeof FavoriteItemSchema>;
+
+export const FavoritesResponseSchema = z.object({
+  items: z.array(FavoriteItemSchema),
+  nextCursor: z.string().nullable(),
+  total: z.number().int(),
+  max: z.number().int(),
+});
+export type FavoritesResponse = z.infer<typeof FavoritesResponseSchema>;
+
+export const FavoriteStatusSchema = z.object({ favorited: z.boolean(), total: z.number().int() });
+
+export const NoteTextSchema = z.string().trim().max(1000).nullable();
+export const ItemNoteRequestSchema = ItemRefSchema.extend({ note: NoteTextSchema });
+
+// ---------------------------------------------------------------------------- saved filters
+
+export const SavedFilterSchema = z.object({
+  id: UuidSchema,
+  name: z.string(),
+  filters: FiltersSchema,
+  createdAt: Iso,
+});
+export type SavedFilter = z.infer<typeof SavedFilterSchema>;
+export const SavedFiltersResponseSchema = z.object({
+  items: z.array(SavedFilterSchema),
+  max: z.number().int(),
+});
+export const SaveFilterRequestSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  filters: FiltersSchema,
+});
+
+// ---------------------------------------------------------------------------- profiles and comments
+
+export const ProfileRequestSchema = z.object({
+  displayName: z
+    .string()
+    .transform(normalizeDisplayName)
+    .refine((v) => displayNameProblem(v) === null, { message: "Choose a different display name" }),
+});
+export const ProfileResponseSchema = z.object({ displayName: z.string() });
+
+export const CommentSchema = z.object({
+  id: UuidSchema,
+  body: z.string(),
+  createdAt: Iso,
+  author: z.object({
+    displayName: z.string(),
+    rank: z.object({ level: z.number().int(), title: z.string() }),
+    pro: z.boolean(),
+  }),
+  mine: z.boolean(),
+});
+export type Comment = z.infer<typeof CommentSchema>;
+export const CommentsResponseSchema = z.object({ comments: z.array(CommentSchema) });
+export const CreateCommentRequestSchema = z.object({ body: z.string().trim().min(1).max(1000) });
+
+/** A commenter the viewer blocked. `id` names the block, never the blocked user. */
+export const BlockedCommenterSchema = z.object({
+  id: UuidSchema,
+  displayName: z.string(),
+  blockedAt: Iso,
+});
+export type BlockedCommenter = z.infer<typeof BlockedCommenterSchema>;
+export const BlockedCommentersResponseSchema = z.object({
+  items: z.array(BlockedCommenterSchema),
+  max: z.number().int(),
+});
+export type BlockedCommentersResponse = z.infer<typeof BlockedCommentersResponseSchema>;
+
+// ---------------------------------------------------------------------------- trending
+
+/** Records the most people favorited lately. Built from favorites only, never YouTube data. */
+export const TrendingItemSchema = CatalogItemSchema.extend({ fans: z.number().int() });
+export type TrendingItem = z.infer<typeof TrendingItemSchema>;
+export const TrendingResponseSchema = z.object({
+  items: z.array(TrendingItemSchema),
+  days: z.number().int(),
+});
+export type TrendingResponse = z.infer<typeof TrendingResponseSchema>;
+
+export const MyCommentSchema = z.object({
+  id: UuidSchema,
+  recordKey: RecordKeySchema,
+  body: z.string(),
+  createdAt: Iso,
+  hidden: z.boolean(),
+  record: z.object({ title: z.string(), artist: z.string() }).nullable(),
+});
+export type MyComment = z.infer<typeof MyCommentSchema>;
+export const MyCommentsResponseSchema = z.object({ comments: z.array(MyCommentSchema) });
+
+// ---------------------------------------------------------------------------- for you
+
+export const ForYouResponseSchema = SequenceResponseSchema.extend({
+  /** The styles the picks are drawn from; empty when there is nothing to go on yet. */
+  basis: z.array(z.string()),
+});
+export type ForYouResponse = z.infer<typeof ForYouResponseSchema>;

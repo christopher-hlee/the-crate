@@ -19,6 +19,11 @@ const config: NextConfig = {
     NEXT_PUBLIC_AUTH_MODE:
       process.env.AUTH_MODE ??
       (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL ? "supabase" : "dev"),
+    // OAuth buttons on the login page, a comma list such as "google,apple". Each provider must
+    // also be enabled in the Supabase project. Unset: email sign-in only.
+    NEXT_PUBLIC_AUTH_PROVIDERS: process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? "",
+    // Ad space for plans with ads ("1", "true", "on" or "yes"). Off by default.
+    NEXT_PUBLIC_FEATURE_ADS: process.env.NEXT_PUBLIC_FEATURE_ADS ?? "",
   },
   async headers() {
     return [

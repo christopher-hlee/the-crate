@@ -1,4 +1,5 @@
 import { TempoVoteRequestSchema } from "@app/api-client";
+import { limitsFor } from "@app/core";
 import { requireViewer } from "@/server/auth";
 import { db } from "@/server/db";
 import { clientIp, json, notFound, proRequired, readJson, route } from "@/server/http";
@@ -10,7 +11,7 @@ export const POST = route(async (req) => {
   const viewer = await requireViewer(req);
   const pool = db();
   await rateLimit(pool, "tempoVote", { userId: viewer.userId, ip: clientIp(req) });
-  if ((await planFor(pool, viewer.userId)).plan !== "pro")
+  if (!limitsFor((await planFor(pool, viewer.userId)).plan).tempoVotes)
     throw proRequired("Tempo and key votes", true);
   const vote = await readJson(req, TempoVoteRequestSchema);
   const track = await pool.query(

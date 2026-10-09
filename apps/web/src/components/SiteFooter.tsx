@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SupportEmail } from "./SupportEmail";
 
 export function SiteFooter() {
   return (
@@ -23,6 +24,9 @@ export function SiteFooter() {
         <Link className="underline" href="/changelog">
           Changelog
         </Link>
+        <span data-testid="footer-contact">
+          Contact: <SupportEmail className="underline" short />
+        </span>
       </div>
     </footer>
   );
