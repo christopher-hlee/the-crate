@@ -132,3 +132,31 @@ account, then App Review and Google Play review (checklist in `docs/store-listin
 Gate before launch (needs the owner): the lawyer's review of the rights rules
 (`packages/core/src/rights.ts`, DECISIONS 29), the first curated manifest, R2 CORS for the web
 origin, and an archive build of the apps if the lane goes to mobile.
+
+## Market parity (DECISIONS 35–44)
+
+- [x] Tier split in `packages/core/src/plans.ts`: Free favorites, saved filters, notes, tempo,
+      key and views; Pro crates, keyword, topic and "more from" filters, 1,000-play history.
+- [x] Favorites (10,000), saved filter sets (200), crate item notes, profiles and comments with
+      ranks and report-to-hide; YouTube channel and tags stored as API data and purged in 30 days.
+- [x] Keyword search over Discogs names and YouTube titles and tags (GIN expression indexes).
+- [x] Dig: heart and F, saved filters, scopes, comments, autoplay next, player settings (random
+      start, next after N seconds, replays, hide comments).
+- [x] Trending (favorites only) and a Your comments page.
+- [x] Mobile: favorites tab, saved filters, the new filter split, comments, "more from", playlist
+      links, display names.
+- [x] Web lists: favorites page with inline notes, For you, Play all with auto-advance, hearts
+      on every list, YouTube playlist links on favorites and crates, clear history.
+- [x] Sign-in: email and password, sign-up, magic link, password reset, `next`; account display
+      name and rank; header links and sign out; robots.txt and sitemaps.
+- [x] Moderation (DECISIONS 48): block commenters (web and mobile, with an Account list), a link
+      and blocked-terms filter before posting, reports only from accounts with a display name
+      and recounted from live rows, a contact point and "What you post" in the Terms.
+
+Owner sign-off before launch: the `watch_videos` link-out (DECISIONS 40), and whether "Open as
+YouTube playlist" stays Pro.
+
+Owner items before the iOS submission (DECISIONS 48): set the support email
+(`NEXT_PUBLIC_SUPPORT_EMAIL` on the web, `EXPO_PUBLIC_SUPPORT_EMAIL` in EAS; a marked placeholder
+shows until then), set `COMMENT_BLOCKED_TERMS`, and name who reviews reported comments within 24
+hours (RUNBOOK, "Moderation").

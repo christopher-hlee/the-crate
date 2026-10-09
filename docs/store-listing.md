@@ -21,11 +21,13 @@ because the app ID is also the player's `Referer` (`https://` plus the app ID).
 >
 > - Shuffle through millions of records, filtered your way.
 > - See where each record comes from, with a link to its Discogs page.
-> - Save what you love to crates, and pick up where you left off on the web.
-> - Swipe for the next record, press and hold to save.
+> - Favorite what you love, save filter sets, and pick up where you left off on the web.
+> - Swipe for the next record, press and hold to favorite.
+> - Tempo, key and view-count filters, timestamped notes and comments, free.
 >
-> Listening is free. Pro adds digging tools: tempo and key filters, deep cuts, seeded crates
-> you can share, timestamped notes, a longer history and crate sheets.
+> Listening is free. Pro adds digging tools: crates, keyword search, topic channels, "more from"
+> this label, artist or channel, deep cuts, seeded crates you can share, a longer history and
+> crate sheets.
 >
 > Videos play in YouTube's player and stay on YouTube: nothing is downloaded, and nothing
 > plays in the background. Record data comes from the Discogs data dumps (CC0). Tempo data
@@ -48,7 +50,8 @@ the app):
 | Email address | App functionality | Supabase sign-in |
 | User ID | App functionality | Supabase user ID; also RevenueCat's app user ID |
 | Purchase history | App functionality | Store subscriptions through RevenueCat |
-| Product interaction | App functionality | Play history (record and video played), crates, notes, votes |
+| Product interaction | App functionality | Play history (record and video played), favorites, crates, saved filters, notes, votes |
+| Other user content | App functionality | Display name and comments (public, with rank and Pro badge), comment reports |
 | Crash data | App functionality | Sentry, when a DSN is configured |
 
 Google Play data safety matches: the same data, encrypted in transit, deletable in the app
@@ -69,11 +72,11 @@ Service).
 >
 > **What the app adds.** The record data (artist, label, catalog number, year, tracklist)
 > comes from Discogs' CC0 data dumps, and each record links to its discogs.com page. The
-> filters, crates and history are the app's own features.
+> filters, favorites, crates, comments and history are the app's own features.
 >
 > **Subscriptions.** Pro is an auto-renewable subscription through in-app purchase. It sells
-> digging tools (filters, seeded crates, notes, exports of links); listening is free and never
-> needs Pro. Restore purchases is on the Account tab.
+> digging tools (crates, keyword and channel filters, seeded crates, exports of links); listening
+> is free and never needs Pro. Restore purchases is on the Account tab.
 >
 > **Demo account.** Account › Sign in › "Use a password", with the email and password given in
 > App Store Connect. The account has Pro so the Pro tools can be reviewed.

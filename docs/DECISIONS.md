@@ -270,3 +270,189 @@ which only the end-to-end tests set. Vercel refuses dev auth outright. Deleting 
 cancels its Stripe subscription first (the deletion stops if Stripe can't be reached), and a
 late cancellation webhook for a user with no subscription row is ignored instead of recreating
 data for a deleted account. Store subscriptions still have to be cancelled in the store.
+
+## 35. Free and Pro follow the market's split; listening stays free
+
+Supersedes the tier table in the spec's "Product scope" and the Free crate limits. The split
+follows the leading crate-digging app's published tiers, with three tools moved down to Free
+so the cheaper plan is also the more generous one:
+
+- **Free (signed in):** 10,000 favorites, 200 saved filter sets, 10,000 timestamped notes,
+  tempo, key and max-views filters, tap tempo and tempo/key votes, comments, a 50-play history.
+- **Pro:** crates (200 of up to 1,000 records), keyword search, topic channels, "more from"
+  this release, channel, label or artist, deep-cut and format-note filters, a 1,000-play
+  history, crate sheets (CSV/JSON), share links and seeded crates, YouTube playlist links
+  (see 40), no ads.
+
+Notes, tempo and key are Free here (the reference app keeps notes under Pro). Every record
+plays free for everyone, signed in or not; Play all and the daily dig are free too (rule 6).
+A lapsed Pro keeps read, play, trim and delete on their crates and can unshare them, but can't
+create crates or add to them; notes are kept. The numbers live in `packages/core/src/plans.ts`.
+
+## 36. Favorites are their own table
+
+`favorites` holds keys only (user, record key, video ID, note, added at), capped at 10,000,
+with no foreign keys into catalog tables. The heart or F toggles a favorite; S opens the crate
+picker on Pro and favorites on Free. Favorites feed "For you" and Trending (41) and count
+toward rank (37). The list pages newest first with an opaque keyset cursor (added at, record
+key, video ID), so removing favorites while scrolling never skips any. Saved filter sets are
+stored as the same normalized filter object the URL uses (a set with a channel scope can't be
+saved, 39), so a preset that includes Pro filters stays visible but locked on Free.
+
+## 37. Comments, display names and ranks
+
+Comments are per record (record key), up to 1,000 characters, shown with the author's display
+name, rank and a Pro badge. A display name is required before the first comment: 3 to 30
+letters, numbers, spaces, dots, dashes or underscores, folded to NFKC, from one alphabet when
+Latin, Cyrillic or Greek letters are involved (so lookalikes can't pass), unique ignoring case and
+separators, with staff-like names reserved. Rank comes from contributions only (a favorite 1 point, a comment 3, a
+tempo or key vote 2), never from plays or YouTube data. A comment that three different people
+report is hidden until a moderator looks; authors see "Hidden after reports" on their own list.
+Account deletion removes comments, reports and the profile.
+
+## 38. Keyword search, topic channels and "more from"
+
+Pro keyword search matches each word as a prefix, and every word must match within one source:
+the Discogs side (record, artist, label, track and style names) or the YouTube side (video title
+and tags). Words split at punctuation the way Postgres splits the indexed names, so "Post-Punk"
+searches "post" and "punk" and "R&B" searches "r" and "b"; combining marks stay inside their
+word, so Devanagari and Thai words match whole. Two IMMUTABLE functions (`record_search_doc`,
+`video_search_doc`) back GIN expression indexes. Counts, candidate lists and seeded orders read
+the union of each source's matches so both indexes serve them; the rand_key seek, which only
+runs on broad filter sets, tests each row instead. The query is built from sanitized terms in
+`packages/core/src/keywords.ts` and only ever reaches SQL as a parameter. "Topic channels only"
+means YouTube's auto-generated "<Artist> - Topic" uploads. "More from" scopes the shuffle to one
+record key, channel ID, Discogs label ID or artist ID. Inside a record scope the session's
+no-repeat list doesn't apply to the scoped record (it is always the one on screen); the client
+keeps the video on screen out by sending its ID in `seen`, which the server honours for every
+viewer and with repeats on.
+
+## 39. YouTube channel and tags are stored as API data under rule 7
+
+The worker's existing `videos.list` call already returns `snippet.channelId`, `channelTitle` and
+`tags`, so adding them costs no quota. They live in `yt_videos` with the other API data, are
+refreshed with it and nulled by the purge within 30 days, and are used only as filters (topic
+channels, more from this channel, keywords). They never feed a score, a rank or Trending. A
+channel scope lives only in the URL and the current dig. Saving a filter set or seeding a crate
+with one is refused with an explanation (never silently dropped, which would store a broader
+search than the one on screen), so no channel ID outlives the purge in a user table.
+
+## 40. YouTube playlists: a link out, Play all, and no API export yet
+
+Supersedes 20. Three ways to hear a list as one run:
+
+- **Play all** (free, every plan): the page's one player plays the list in order, advancing
+  with `loadVideoById` when a video ends. It keeps our visibility rule, error skipping and play
+  logging, which YouTube's own `loadPlaylist` would bypass.
+- **Open as YouTube playlist** (Pro): a plain link to `youtube.com/watch_videos?video_ids=…`,
+  up to 50 videos per link, so longer lists get several links. It opens an untitled, temporary
+  playlist on YouTube. It makes no API call and brings no data back, so it uses no quota and
+  needs no OAuth. The URL is not in Google's documentation. We read rule 9 as covering how we
+  get YouTube data, not where we link people, so we treat the link as allowed, but the owner
+  should confirm this before launch. Turning it off is one line in `plans.ts`.
+- **Save to my YouTube account** (not built): `playlists.insert` plus one `playlistItems.insert`
+  per video costs 50 units each, so 2,550 units for 50 videos. That is more than the share of the
+  default 10,000-unit daily quota the worker leaves free. It needs the sensitive `youtube` OAuth
+  scope, Google's verification, and a quota audit that names the feature. It stays behind
+  `FEATURE_PLAYLIST_EXPORT`, which stays off.
+
+## 41. Trending is built from favorites
+
+Trending lists the playable records the most different people favorited in the last 7 days.
+A record needs at least two fans to appear, so it never shows one person's taste. The top 50
+are cached for 10 minutes. It reads favorites only: no view counts or other YouTube data
+(rule 7). There is no "rising" list yet.
+
+## 42. Dig player settings live on the device
+
+The Dig settings are kept in `localStorage` and change only what plays next and where it starts:
+- autoplay the next record when a video ends;
+- start at the top, a fixed offset, or a random point between 0:10 and 1:15;
+- move on after a set number of seconds heard (off, 0:30, 1:00, 1:30 or 2:00);
+- let records already heard come round again (the shuffle's `repeats=1`, which keeps only
+  this session's records out);
+- hide comments.
+
+Any automatic next pick autoplays only while more than half the player is visible; otherwise it
+is cued.
+
+## 43. On mobile, long-press favorites on Free
+
+Supersedes 25 for Free accounts: a long-press on the pick card adds the record to favorites
+(with a success haptic) because Free has no crates. Pro keeps the last-crate behaviour.
+
+## 44. What the reference app has that we leave out
+
+- Time signature: there's no allowed source. Its tempo, key and time-signature fields line up
+  with Spotify's audio features, which rule 18 bars.
+- Discogs cover art: barred by rule 16. We keep the generated sleeves.
+- Bluetooth, headphone and CarPlay media controls: these need background playback of YouTube,
+  which rule 2 bars.
+
+## 45. Sign-in methods
+
+Supabase mode on the web offers:
+- email and password, plus sign-up with email confirmation;
+- a magic link;
+- a password reset that lands on `/account/password`;
+- OAuth buttons for the providers listed in `NEXT_PUBLIC_AUTH_PROVIDERS`. Spotify is never one
+  (rule 18).
+
+Every sign-in path carries a `next` parameter. Only same-origin paths starting with `/` are
+accepted; `//`, backslashes, control characters and `/login` or `/auth` targets all fall back to
+`/`. Sessions persist until sign-out, which covers a "remember me" option. Dev auth is
+unchanged.
+
+## 46. Sitemaps and robots.txt
+
+Record pages are listed in sitemaps of up to 50,000 URLs each, split by record-key ranges that
+are cached for 6 hours. They are rendered per request, so a build never needs the database and
+the files follow the monthly catalog. robots.txt allows the public pages (Dig, records, Daily,
+Trending, Changelog, legal) and keeps search engines out of the API and personal pages. No
+YouTube data appears in either.
+
+## 47. Shared crates keep item notes private
+
+A shared crate shows its records to anyone, but the owner's notes on items are left out of the
+public response.
+
+## 48. Comment moderation: blocks, a filter before posting, a contact point
+
+Supersedes the reporting part of 37. Public comments put the apps under App Store guideline
+1.2, which asks for a way to block abusive users, a filter for objectionable content, a way to
+report it with a timely response, and a published contact point.
+
+- **Blocks.** Anyone signed in can block a comment's author (`POST /api/v1/comments/:id/block`,
+  with an inline confirm on web and mobile). `user_blocks` holds blocker, blocked and an opaque
+  block ID; comment lists leave out blocked authors for the blocker only, and the blocked person
+  isn't told. `GET /api/v1/me/blocks` lists blocks by display name and block ID, and
+  `DELETE /api/v1/me/blocks/:id` unblocks, from the Account page and screen. User IDs never
+  leave the server. Up to 1,000 blocks per account. Account deletion removes rows on either
+  side.
+- **Filter before posting.** A comment is refused with a 400 when it holds a link (a scheme,
+  `www.`, or a bare domain: common endings anywhere, word-like endings such as `.me` or `.be`
+  only with a path, and a capitalized ending after a dot reads as a missed space), or a term from
+  the operator's `COMMENT_BLOCKED_TERMS` (comma separated, whole words or phrases, compared after
+  NFKC, lowercasing and dropping invisible characters). The list lives in the deployment's
+  settings, never in git. The matcher is `packages/core/src/moderation.ts`.
+- **Reports.** Only accounts with a display name can report (409 otherwise). `report_count` and
+  `hidden` are worked out from the live `comment_reports` rows (from reporters with a display
+  name) inside the report transaction, and again when a reporter's account is deleted, so
+  deleting and re-registering never stacks reports. `hidden` no longer doubles as a moderator
+  flag: moderators remove a comment by deleting it (RUNBOOK, "Moderation"). Reports are reviewed
+  within 24 hours.
+- **Contact and rules.** `NEXT_PUBLIC_SUPPORT_EMAIL` and `EXPO_PUBLIC_SUPPORT_EMAIL` appear on
+  the Terms, the Privacy policy, the site footer and the mobile Account screen. Until they are
+  set, `support@example.com` shows, marked as a placeholder. The Terms gain "What you post": the
+  rules, removal and suspension, how to report and block, and the contact.
+
+## 49. Email links use PKCE only; sign-in errors use fixed words
+
+This amends entry 45. `/auth/callback` accepts only PKCE `code` links, from OAuth and from
+Supabase's default email templates. A code works only in the browser or app that asked for the
+email, so a link someone else sends can't sign a visitor into their account (login CSRF), and the
+mobile app's deep links keep working. Links that carry a bare `token_hash` would work from any
+browser, so they are refused. The cost is that an email link must be opened where it was
+requested. Redirects use `NEXT_PUBLIC_APP_URL` when it is set. The login page shows fixed words
+for known Supabase error codes and a generic message for any other. It never shows the
+`error_description` text from a link.

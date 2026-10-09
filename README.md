@@ -1,8 +1,8 @@
 # the-crate
 
 Dig through records at random. Discogs' monthly CC0 data dump decides what plays and
-YouTube's official player plays it. Set filters, shuffle, listen, and save what you like to
-a crate.
+YouTube's official player plays it. Set filters, shuffle, listen, and keep what you like in
+favorites or crates.
 
 > Working name. The product name is still open, so code uses the `APP_NAME` constant.
 
@@ -39,14 +39,20 @@ EXPO_PUBLIC_API_URL=http://<your-lan-ip>:3000 EXPO_PUBLIC_AUTH_MODE=dev \
   live in one transaction, with rollback, a style census and a monthly changelog.
 - **YouTube state:** the worker validates every linked video with the Data API inside a
   Pacific-day quota budget, rechecks reported videos and deletes stale API data after 30 days.
-- **Web (Free):** Dig with one compliant player, filters with census counts, record panel with
-  a generated sleeve, crates, history, changelog, account deletion, legal pages.
-- **Web (Pro):** tempo, key, deep-cut, label and artist filters; seeded crates and share links;
-  the daily dig; timestamped notes; tap tempo and key votes; crate sheets (CSV and JSON);
-  Stripe and RevenueCat billing on one `pro` entitlement.
-- **Mobile (Expo):** Dig, Crates, History and Account; the player page from
+- **Free (signed in):** Dig with one compliant player, filters with census counts plus tempo,
+  key and max views, favorites (heart or F, up to 10,000), 200 saved filter sets, timestamped
+  notes, tap tempo and key votes, comments with display names and ranks, For you, Trending,
+  a 50-play history, player settings (random start, next after N seconds, replays). Everything
+  plays free, signed in or not; signing in keeps your lists.
+- **Pro:** crates (200 of up to 1,000 records) with Play all, seeded crates and share links,
+  keyword search over record names and video titles and tags, topic channels, "more from"
+  this release, channel, label or artist, deep-cut and format-note filters, a 1,000-play
+  history, crate sheets (CSV and JSON), "Open as YouTube playlist" links (50 videos each), no
+  ads. Stripe and RevenueCat billing on one `pro` entitlement.
+- **Mobile (Expo):** Dig, Favorites, Crates, History and Account; the player page from
   `packages/player-html` in a WebView whose `baseUrl` is the app ID; swipe for next,
-  long-press to save, haptics, offline state, pause on background, RevenueCat purchases.
+  long-press to favorite (or save to the last crate on Pro), saved filters, comments,
+  haptics, offline state, pause on background, RevenueCat purchases.
   Store copy and review notes are in [`docs/store-listing.md`](docs/store-listing.md).
 - **Archive (Phase 4, flagged and unlisted):** public-domain and Creative Commons recordings we
   host ourselves, each with a rights record checked by rules in `packages/core`; a waveform
