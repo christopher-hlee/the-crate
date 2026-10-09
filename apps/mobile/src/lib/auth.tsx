@@ -1,4 +1,4 @@
-import { createApiClient, type MeResponse } from "@app/api-client";
+import { ApiError, createApiClient, type MeResponse } from "@app/api-client";
 import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
@@ -9,9 +9,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { config } from "./config";
+import { favoriteStore } from "./favorites";
 import { supabase } from "./supabase";
 
 const DEV_USER_KEY = "crate.devUser";
@@ -24,7 +26,8 @@ type AuthState = {
   refresh: () => Promise<void>;
   signInWithEmail: (email: string) => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<void>;
-  signInWithProvider: (provider: "google" | "apple") => Promise<void>;
+  /** Resolves false when the person cancels or dismisses the sign-in sheet. */
+  signInWithProvider: (provider: "google" | "apple") => Promise<boolean>;
   signInAsDevUser: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -61,12 +64,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       setMe(await api.me());
-    } catch {
-      setMe(null);
+    } catch (err) {
+      // Only a rejected session signs the viewer out; a network blip keeps what we had.
+      if (err instanceof ApiError && err.status === 401) setMe(null);
     } finally {
       setLoading(false);
     }
   }, [api]);
+
+  // What the app knows about favorites belongs to one user.
+  const userId = me?.user.id ?? null;
+  const lastUser = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastUser.current === userId) return;
+    lastUser.current = userId;
+    favoriteStore.clear();
+  }, [userId]);
 
   useEffect(() => {
     void refresh();
@@ -116,14 +129,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (error || !data.url) throw error ?? new Error("No sign-in URL");
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type === "success") {
-        const code = Linking.parse(result.url).queryParams?.code;
-        if (typeof code === "string") await sb.auth.exchangeCodeForSession(code);
+      // Cancelled or dismissed: not an error, but not signed in either.
+      if (result.type !== "success") return false;
+      const params = Linking.parse(result.url).queryParams ?? {};
+      const code = params.code;
+      if (typeof code !== "string") {
+        const reason = params.error_description ?? params.error;
+        throw new Error(typeof reason === "string" ? reason : "Sign-in didn't finish. Try again.");
       }
+      const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code);
+      if (exchangeError) {
+        // On Android the redirect can also reach the deep-link handler, which may have
+        // exchanged the code first; a session means sign-in worked either way.
+        const { data: now } = await sb.auth.getSession();
+        if (!now.session) throw exchangeError;
+      }
+      await refresh();
+      return true;
     },
     async signInAsDevUser() {
       await SecureStore.setItemAsync(DEV_USER_KEY, randomUuid());
-      await refresh();
+      // Throws on failure, so the sign-in screen stays put and shows the error.
+      setMe(await api.me());
     },
     async signOut() {
       if (config.authMode === "dev") await SecureStore.deleteItemAsync(DEV_USER_KEY);

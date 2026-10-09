@@ -1,21 +1,169 @@
-import { APP_NAME } from "@app/core";
-import { router } from "expo-router";
+import type { BlockedCommenter } from "@app/api-client";
+import { APP_NAME, PLAN_LIMITS } from "@app/core";
+import { router, useFocusEffect } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { DisplayNameForm } from "../../src/components/DisplayNameForm";
 import { Button, Notice, Section } from "../../src/components/ui";
 import { archiveEnabled } from "../../src/lib/archive";
 import { useAuth } from "../../src/lib/auth";
 import { config } from "../../src/lib/config";
+import { errorMessage } from "../../src/lib/errors";
 import { buy, configurePurchases, proPackages, restore } from "../../src/lib/purchases";
+import { SUPPORT } from "../../src/lib/support";
 
 const SOURCE: Record<string, string> = {
   stripe: "the web",
   app_store: "the App Store",
   play_store: "Google Play",
 };
+
+const FREE = PLAN_LIMITS.free;
+const PRO = PLAN_LIMITS.pro;
+
+// What each plan includes. Listening is never on either list: playing is free for everyone.
+const FREE_TOOLS = [
+  `Favorites (up to ${FREE.maxFavorites.toLocaleString()}) and ${FREE.maxSavedFilters} saved filter sets`,
+  "Timestamped notes on any record",
+  "Tempo, key and view-count filters",
+  "Comments, and tempo and key votes",
+];
+const PRO_TOOLS = [
+  `Crates: ${PRO.maxCrates ?? "unlimited"}, up to ${PRO.maxItemsPerCrate?.toLocaleString() ?? "any number of"} records each, with seeded orders and share links`,
+  "Keyword search and topic-channel filters",
+  "“More from” a release, channel, label or artist",
+  `A ${PRO.historyWindow.toLocaleString()}-play history`,
+  "CSV and JSON exports, and YouTube playlist links",
+  "No ads",
+];
+
+function ToolList({ title, items }: { title: string; items: readonly string[] }) {
+  return (
+    <View className="mb-3">
+      <Text className="mb-1 font-semibold text-ink">{title}</Text>
+      {items.map((t) => (
+        <Text key={t} className="text-ink-2">
+          · {t}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+/** The public name shown with comments, and the contribution rank beside it. */
+function ProfileSection({ onSaved }: { onSaved: (message: string) => void }) {
+  const { me } = useAuth();
+  const [editing, setEditing] = useState(false);
+  if (!me) return null;
+  const name = me.profile?.displayName ?? null;
+  return (
+    <Section title="Profile">
+      {name && !editing ? (
+        <>
+          <Text testID="display-name" className="text-lg font-semibold text-ink">
+            {name}
+          </Text>
+          <Text className="mb-2 text-ink-2">
+            {me.rank.title} · {me.rank.points.toLocaleString()} point
+            {me.rank.points === 1 ? "" : "s"} from favorites, comments and votes
+          </Text>
+          <Button variant="ghost" label="Change display name" onPress={() => setEditing(true)} />
+        </>
+      ) : (
+        <DisplayNameForm
+          initial={name ?? ""}
+          prompt={
+            name
+              ? "Choose a new display name."
+              : "Choose a display name. It's shown with your comments."
+          }
+          onSaved={() => {
+            setEditing(false);
+            onSaved("Display name saved.");
+          }}
+          onCancel={name ? () => setEditing(false) : undefined}
+        />
+      )}
+    </Section>
+  );
+}
+
+/** Commenters this account blocked, reloaded whenever the screen comes into view. */
+function BlockedSection() {
+  const { api, me } = useAuth();
+  const userId = me?.user.id ?? null;
+  const [items, setItems] = useState<BlockedCommenter[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (!userId) return;
+    let live = true;
+    setLoadFailed(false);
+    api
+      .blockedCommenters()
+      .then((r) => live && setItems(r.items))
+      .catch(() => live && setLoadFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [api, userId]);
+  useFocusEffect(load);
+
+  const unblock = async (b: BlockedCommenter) => {
+    setError(null);
+    setPending(b.id);
+    try {
+      await api.unblockCommenter(b.id);
+      setItems((prev) => (prev ?? []).filter((x) => x.id !== b.id));
+    } catch (err) {
+      setError(errorMessage(err, `Couldn't unblock ${b.displayName}. Try again.`));
+    } finally {
+      setPending(null);
+    }
+  };
+
+  if (!me) return null;
+  return (
+    <Section title="Blocked commenters">
+      <Text className="mb-2 text-ink-2">
+        You don't see comments from people you block. They aren't told.
+      </Text>
+      {error ? (
+        <Text accessibilityRole="alert" className="mb-2 text-warn">
+          {error}
+        </Text>
+      ) : null}
+      {loadFailed ? (
+        <View className="flex-row items-center">
+          <Text className="mr-3 text-ink-2">Couldn't load the list.</Text>
+          <Button variant="ghost" label="Try again" onPress={() => void load()} />
+        </View>
+      ) : items?.length === 0 ? (
+        <Text testID="blocked-empty" className="text-ink-2">
+          You haven't blocked anyone.
+        </Text>
+      ) : (
+        items?.map((b) => (
+          <View key={b.id} className="flex-row items-center justify-between py-1">
+            <Text className="flex-1 text-ink">{b.displayName}</Text>
+            <Button
+              variant="ghost"
+              label="Unblock"
+              accessibilityLabel={`Unblock ${b.displayName}`}
+              busy={pending === b.id}
+              onPress={() => void unblock(b)}
+            />
+          </View>
+        ))
+      )}
+    </Section>
+  );
+}
 
 export default function AccountScreen() {
   const { api, me, refresh, signOut } = useAuth();
@@ -68,7 +216,7 @@ export default function AccountScreen() {
   const deleteAccount = () =>
     Alert.alert(
       "Delete your account?",
-      "Your crates, history, notes and votes are deleted now, and everything else within 7 days. A store subscription has to be cancelled in the store.",
+      "Your favorites, crates, saved filters, history, notes, comments, votes and display name are deleted now, and everything else within 7 days. A store subscription has to be cancelled in the store.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -101,7 +249,7 @@ export default function AccountScreen() {
         ) : (
           <Section title="Sign in">
             <Text className="mb-3 text-ink-2">
-              Sign in to keep crates and history across devices.
+              Sign in to keep favorites, saved filters and history across devices.
             </Text>
             <Button
               testID="sign-in"
@@ -111,6 +259,8 @@ export default function AccountScreen() {
             />
           </Section>
         )}
+        {me ? <ProfileSection onSaved={setNotice} /> : null}
+        {me ? <BlockedSection key={me.user.id} /> : null}
         <Section title="Plan">
           <Text testID="plan" className="mb-1 text-lg font-semibold text-ink">
             {me?.plan === "pro" ? "Pro" : "Free"}
@@ -120,12 +270,15 @@ export default function AccountScreen() {
               {me.planSource ? `Billed through ${SOURCE[me.planSource]}. ` : ""}
               {me.expiresAt ? `Renews or ends ${new Date(me.expiresAt).toLocaleDateString()}.` : ""}
             </Text>
-          ) : (
-            <Text className="mb-3 text-ink-2">
-              Listening is free, always. Pro adds digging tools: tempo, key and deep-cut filters,
-              seeded crates, notes, unlimited crates, a 1,000-play history and crate sheets.
-            </Text>
-          )}
+          ) : null}
+          <Text className="mb-3 text-ink-2">
+            Listening is free, always, signed in or not. Plans only add tools.
+          </Text>
+          <ToolList title="Free, with an account" items={FREE_TOOLS} />
+          <ToolList
+            title={me?.plan === "pro" ? "Pro, which you have" : "Pro adds"}
+            items={PRO_TOOLS}
+          />
           {me && me.plan !== "pro" && packages?.length
             ? packages.map((pkg) => (
                 <View key={pkg.identifier} className="mb-2">
@@ -193,6 +346,17 @@ export default function AccountScreen() {
             {APP_NAME} plays videos with YouTube's player and uses YouTube API Services. Record data
             comes from the Discogs data dumps (CC0).
           </Text>
+          <Pressable
+            testID="support-email"
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL(`mailto:${SUPPORT.email}`).catch(() => undefined)}
+            className="mt-2"
+          >
+            <Text className="text-xs text-ink-2">
+              Contact and reports: <Text className="text-accent underline">{SUPPORT.email}</Text>
+              {SUPPORT.placeholder ? " (a placeholder: the contact address isn't set yet)" : ""}
+            </Text>
+          </Pressable>
         </Section>
         {me ? (
           <Section title="Danger zone">

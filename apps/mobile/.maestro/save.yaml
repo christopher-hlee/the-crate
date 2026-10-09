@@ -1,5 +1,5 @@
 appId: ${APP_ID}
-name: Save a pick to a new crate (dev sign-in build)
+name: Favorite a pick and find it in Favorites (dev sign-in build, Free plan)
 ---
 - launchApp:
     clearState: true
@@ -14,23 +14,29 @@ name: Save a pick to a new crate (dev sign-in build)
 - extendedWaitUntil:
     notVisible: Finding a record
     timeout: 20000
+# Free has no crates: Save offers a favorite instead of a crate form.
 - tapOn:
     id: save
+- assertVisible: Crates are a Pro tool — favorite records instead.
 - tapOn:
-    id: new-crate-name
-- inputText: Maestro crate
-- tapOn: Create and save
+    id: save-favorite
 - extendedWaitUntil:
-    visible: Saved to Maestro crate.
+    visible: In your favorites
     timeout: 10000
-# Long-press the card now saves to the same crate, with a haptic tick.
+# On Free, a long-press on the card favorites too; this pick is already in.
 - longPressOn:
     id: pick-card
+- extendedWaitUntil:
+    visible: Already in your favorites.
+    timeout: 10000
 - tapOn:
-    id: tab-crates
-- assertVisible: Maestro crate
-- tapOn: Maestro crate
+    id: tab-favorites
 - assertVisible:
     id: player-webview
 - assertVisible:
     id: item-0
+# Crates are a Pro tool; the tab explains that favorites are free.
+- tapOn:
+    id: tab-crates
+- assertVisible:
+    id: crates-upsell

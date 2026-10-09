@@ -1,9 +1,19 @@
 import type { StylesResponse } from "@app/api-client";
 import type { Filters } from "@app/core";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { Chip } from "./ui";
+import { type ReactNode, useMemo, useState } from "react";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
+import {
+  applyKeywords,
+  bpmText,
+  CAMELOT_KEYS,
+  hasFilters,
+  MAX_VIEWS_OPTIONS,
+  toggleIn,
+  withBpm,
+} from "../lib/filter-panel";
+import { PresetList, SavePresetRow, useSavedFilters } from "./SavedFilters";
+import { Button, Chip } from "./ui";
 
 type Props = {
   census: StylesResponse | null;
@@ -15,15 +25,32 @@ type Props = {
 
 const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
 
-function toggle(list: string[] | undefined, value: string): string[] | undefined {
-  const set = new Set(list ?? []);
-  if (set.has(value)) set.delete(value);
-  else set.add(value);
-  return set.size ? [...set] : undefined;
+// iOS number pads have no return key, so the BPM boxes use the keyboard that has one.
+const NUMBER_KEYBOARD = Platform.OS === "ios" ? "numbers-and-punctuation" : "number-pad";
+
+const inputClass = "min-h-11 rounded-md border border-line bg-surface-2 px-3 text-ink";
+
+function Label({ children }: { children: ReactNode }) {
+  return <Text className="mb-1 mt-2 text-xs text-ink-2">{children}</Text>;
+}
+
+/**
+ * Text that applies on submit and follows `value` when it changes elsewhere (Clear filters,
+ * a saved set), without remounting the box and losing focus.
+ */
+function useDraft(value: string): [string, (text: string) => void] {
+  const [draft, setDraft] = useState(value);
+  const [base, setBase] = useState(value);
+  if (base !== value) {
+    setBase(value);
+    setDraft(value);
+  }
+  return [draft, setDraft];
 }
 
 /** The filter drawer, inline in the page flow below the pick. */
 export function FilterPanel({ census, filters, onChange, proFilters, matches }: Props) {
+  const saved = useSavedFilters();
   const [query, setQuery] = useState("");
   const styles = useMemo(() => {
     const all = census?.styles ?? [];
@@ -49,13 +76,14 @@ export function FilterPanel({ census, filters, onChange, proFilters, matches }: 
         <Text className="text-xs font-semibold uppercase tracking-wider text-ink-2">Filters</Text>
         {matches ? <Text className="text-xs text-ink-2">{matches} records</Text> : null}
       </View>
+      <PresetList saved={saved} filters={filters} proFilters={proFilters} onApply={onChange} />
       <TextInput
         testID="style-search"
         value={query}
         onChangeText={setQuery}
         placeholder="Search styles"
         placeholderTextColor="#a89f93"
-        className="mb-2 min-h-11 rounded-md border border-line bg-surface-2 px-3 text-ink"
+        className={`mb-2 ${inputClass}`}
       />
       <View className="flex-row flex-wrap">
         {chosen.map((s) => (
@@ -63,7 +91,7 @@ export function FilterPanel({ census, filters, onChange, proFilters, matches }: 
             key={s}
             label={`${s} ✕`}
             active
-            onPress={() => onChange({ ...filters, styles: toggle(chosen, s) })}
+            onPress={() => onChange({ ...filters, styles: toggleIn(chosen, s) })}
           />
         ))}
         {styles
@@ -72,25 +100,25 @@ export function FilterPanel({ census, filters, onChange, proFilters, matches }: 
             <Chip
               key={s.name}
               label={`${s.name} · ${s.records.toLocaleString()}`}
-              onPress={() => onChange({ ...filters, styles: toggle(chosen, s.name) })}
+              onPress={() => onChange({ ...filters, styles: toggleIn(chosen, s.name) })}
             />
           ))}
       </View>
       {often.length ? (
         <>
-          <Text className="mb-1 mt-1 text-xs text-ink-2">Often tagged with</Text>
+          <Label>Often tagged with</Label>
           <View className="flex-row flex-wrap">
             {often.map((s) => (
               <Chip
                 key={s}
                 label={s}
-                onPress={() => onChange({ ...filters, styles: toggle(chosen, s) })}
+                onPress={() => onChange({ ...filters, styles: toggleIn(chosen, s) })}
               />
             ))}
           </View>
         </>
       ) : null}
-      <Text className="mb-1 mt-2 text-xs text-ink-2">Decade</Text>
+      <Label>Decade</Label>
       <View className="flex-row flex-wrap">
         {DECADES.map((d) => (
           <Chip
@@ -107,87 +135,30 @@ export function FilterPanel({ census, filters, onChange, proFilters, matches }: 
           />
         ))}
       </View>
-      <Text className="mb-1 mt-2 text-xs text-ink-2">Format</Text>
+      <Label>Format</Label>
       <View className="flex-row flex-wrap">
         {(census?.formats ?? []).slice(0, 8).map((f) => (
           <Chip
             key={f.name}
             label={f.name}
             active={filters.formats?.includes(f.name)}
-            onPress={() => onChange({ ...filters, formats: toggle(filters.formats, f.name) })}
+            onPress={() => onChange({ ...filters, formats: toggleIn(filters.formats, f.name) })}
           />
         ))}
       </View>
-      <Text className="mb-1 mt-2 text-xs text-ink-2">Country</Text>
+      <Label>Country</Label>
       <View className="flex-row flex-wrap">
         {(census?.countries ?? []).slice(0, 12).map((c) => (
           <Chip
             key={c.name}
             label={c.name}
             active={filters.countries?.includes(c.name)}
-            onPress={() => onChange({ ...filters, countries: toggle(filters.countries, c.name) })}
+            onPress={() => onChange({ ...filters, countries: toggleIn(filters.countries, c.name) })}
           />
         ))}
       </View>
-      <Text className="mb-1 mt-2 text-xs text-ink-2">Pro tools</Text>
-      {proFilters ? (
-        <ProFilters filters={filters} onChange={onChange} />
-      ) : (
-        <>
-          <View className="flex-row flex-wrap">
-            {["Tempo", "Key", "Deep cuts", "Max views", "Label", "Artist"].map((label) => (
-              <Chip key={label} label={label} locked />
-            ))}
-          </View>
-          <Pressable accessibilityRole="link" onPress={() => router.push("/account")}>
-            <Text className="text-accent underline">
-              Pro adds tempo, key, deep-cut, label and artist filters.
-            </Text>
-          </Pressable>
-        </>
-      )}
-      {Object.keys(filters).length ? (
-        <Pressable accessibilityRole="button" onPress={() => onChange({})} className="mt-3">
-          <Text className="text-ink-2 underline">Clear filters</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-const KEYS = Array.from({ length: 12 }, (_, i) => [`${i + 1}A`, `${i + 1}B`]).flat();
-
-function num(text: string): number | undefined {
-  const n = Number(text);
-  return text.trim() && Number.isFinite(n) && n >= 20 && n <= 400 ? n : undefined;
-}
-
-function ProFilters({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
-  const [from, setFrom] = useState(filters.bpmFrom ? String(filters.bpmFrom) : "");
-  const [to, setTo] = useState(filters.bpmTo ? String(filters.bpmTo) : "");
-  const applyBpm = () => onChange({ ...filters, bpmFrom: num(from), bpmTo: num(to) });
-  return (
-    <View testID="pro-filters">
-      <View className="mb-2 flex-row items-center">
-        <TextInput
-          value={from}
-          onChangeText={setFrom}
-          onEndEditing={applyBpm}
-          keyboardType="number-pad"
-          placeholder="BPM from"
-          placeholderTextColor="#a89f93"
-          className="mr-2 min-h-11 flex-1 rounded-md border border-line bg-surface-2 px-3 text-ink"
-        />
-        <TextInput
-          value={to}
-          onChangeText={setTo}
-          onEndEditing={applyBpm}
-          keyboardType="number-pad"
-          placeholder="BPM to"
-          placeholderTextColor="#a89f93"
-          className="min-h-11 flex-1 rounded-md border border-line bg-surface-2 px-3 text-ink"
-        />
-      </View>
+      <Label>Tempo</Label>
+      <BpmRange filters={filters} onChange={onChange} />
       <View className="flex-row flex-wrap">
         <Chip
           label="Half and double time"
@@ -196,13 +167,9 @@ function ProFilters({ filters, onChange }: { filters: Filters; onChange: (f: Fil
             onChange({ ...filters, halfDouble: filters.halfDouble ? undefined : true })
           }
         />
-        <Chip
-          label="Deep cuts"
-          active={filters.deepCutMin !== undefined}
-          onPress={() =>
-            onChange({ ...filters, deepCutMin: filters.deepCutMin !== undefined ? undefined : 0.8 })
-          }
-        />
+      </View>
+      <Label>Key</Label>
+      <View className="flex-row flex-wrap">
         <Chip
           label="Compatible keys"
           active={filters.compatibleKeys}
@@ -210,9 +177,7 @@ function ProFilters({ filters, onChange }: { filters: Filters; onChange: (f: Fil
             onChange({ ...filters, compatibleKeys: filters.compatibleKeys ? undefined : true })
           }
         />
-      </View>
-      <View className="flex-row flex-wrap">
-        {KEYS.map((k) => (
+        {CAMELOT_KEYS.map((k) => (
           <Chip
             key={k}
             label={k}
@@ -223,6 +188,175 @@ function ProFilters({ filters, onChange }: { filters: Filters; onChange: (f: Fil
           />
         ))}
       </View>
+      <Label>Views on YouTube</Label>
+      <View className="flex-row flex-wrap">
+        {MAX_VIEWS_OPTIONS.map((o) => (
+          <Chip
+            key={o.value}
+            label={o.label}
+            active={filters.maxViews === o.value}
+            onPress={() =>
+              onChange({
+                ...filters,
+                maxViews: filters.maxViews === o.value ? undefined : o.value,
+              })
+            }
+          />
+        ))}
+      </View>
+      <Label>Pro tools</Label>
+      {proFilters ? (
+        <ProFilters filters={filters} onChange={onChange} />
+      ) : (
+        <>
+          <View className="flex-row flex-wrap">
+            {["Keywords", "Topic channels only", "Deep cuts", "More from…"].map((label) => (
+              <Chip key={label} label={label} locked />
+            ))}
+          </View>
+          <Pressable accessibilityRole="link" onPress={() => router.push("/account")}>
+            <Text className="text-accent underline">
+              Pro adds keyword search, topic-channel and deep-cut filters, and “more from” a
+              release, channel, label or artist.
+            </Text>
+          </Pressable>
+        </>
+      )}
+      {hasFilters(filters) ? (
+        <Pressable accessibilityRole="button" onPress={() => onChange({})} className="mt-3">
+          <Text className="text-ink-2 underline">Clear filters</Text>
+        </Pressable>
+      ) : null}
+      <SavePresetRow saved={saved} filters={filters} proFilters={proFilters} />
+    </View>
+  );
+}
+
+function BpmRange({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
+  const [from, setFrom] = useDraft(bpmText(filters.bpmFrom));
+  const [to, setTo] = useDraft(bpmText(filters.bpmTo));
+  const dirty = from !== bpmText(filters.bpmFrom) || to !== bpmText(filters.bpmTo);
+  const apply = () => {
+    const next = withBpm(filters, from, to);
+    // Out-of-range text is cleared rather than left looking applied.
+    setFrom(bpmText(next.bpmFrom));
+    setTo(bpmText(next.bpmTo));
+    if (next.bpmFrom !== filters.bpmFrom || next.bpmTo !== filters.bpmTo) onChange(next);
+  };
+  return (
+    <View testID="bpm-range" className="mb-2 flex-row items-center">
+      <TextInput
+        testID="bpm-from"
+        value={from}
+        onChangeText={setFrom}
+        onSubmitEditing={apply}
+        onEndEditing={apply}
+        returnKeyType="done"
+        keyboardType={NUMBER_KEYBOARD}
+        maxLength={5}
+        placeholder="BPM from"
+        placeholderTextColor="#a89f93"
+        className={`mr-2 flex-1 ${inputClass}`}
+      />
+      <TextInput
+        testID="bpm-to"
+        value={to}
+        onChangeText={setTo}
+        onSubmitEditing={apply}
+        onEndEditing={apply}
+        returnKeyType="done"
+        keyboardType={NUMBER_KEYBOARD}
+        maxLength={5}
+        placeholder="BPM to"
+        placeholderTextColor="#a89f93"
+        className={`flex-1 ${inputClass}`}
+      />
+      {dirty ? (
+        <View className="ml-2">
+          <Button testID="bpm-apply" label="Set" onPress={apply} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ProFilters({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
+  const scopes: { key: "recordKeys" | "channelIds" | "labelIds" | "artistIds"; label: string }[] = [
+    { key: "recordKeys", label: "This release" },
+    { key: "channelIds", label: "This channel" },
+    { key: "labelIds", label: "This label" },
+    { key: "artistIds", label: "This artist" },
+  ];
+  return (
+    <View testID="pro-filters">
+      <KeywordSearch filters={filters} onChange={onChange} />
+      <View className="flex-row flex-wrap">
+        <Chip
+          testID="topic-only"
+          label="Topic channels only"
+          hint="Only official audio from YouTube's auto-generated Topic channels"
+          active={filters.topicOnly}
+          onPress={() => onChange({ ...filters, topicOnly: filters.topicOnly ? undefined : true })}
+        />
+        <Chip
+          label="Deep cuts"
+          active={filters.deepCutMin !== undefined}
+          onPress={() =>
+            onChange({ ...filters, deepCutMin: filters.deepCutMin !== undefined ? undefined : 0.8 })
+          }
+        />
+        {scopes
+          .filter((s) => (filters[s.key]?.length ?? 0) > 0)
+          .map((s) => (
+            <Chip
+              key={s.key}
+              label={`${s.label} ✕`}
+              active
+              onPress={() => onChange({ ...filters, [s.key]: undefined })}
+            />
+          ))}
+      </View>
+    </View>
+  );
+}
+
+function KeywordSearch({
+  filters,
+  onChange,
+}: {
+  filters: Filters;
+  onChange: (f: Filters) => void;
+}) {
+  const [text, setText] = useDraft(filters.q ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    const result = applyKeywords(filters, text);
+    if (result.filters === null) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    onChange(result.filters);
+  };
+  return (
+    <View className="mb-2">
+      <TextInput
+        testID="keyword-search"
+        value={text}
+        onChangeText={(t) => {
+          setText(t);
+          setError(null);
+        }}
+        onSubmitEditing={submit}
+        returnKeyType="search"
+        autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={100}
+        placeholder="Keywords: artist, label, track, style…"
+        placeholderTextColor="#a89f93"
+        className={inputClass}
+      />
+      {error ? <Text className="mt-1 text-xs text-warn">{error}</Text> : null}
     </View>
   );
 }

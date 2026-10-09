@@ -1,6 +1,9 @@
 import type { RecordDetail, ShufflePick } from "@app/api-client";
 import { formatDuration, youtubeWatchUrl } from "@app/core";
+import { router } from "expo-router";
 import { Linking, Pressable, Text, View } from "react-native";
+import { detailFor, moreFromScopes, type Scope } from "../lib/scopes";
+import { Chip } from "./ui";
 
 function Link({ label, url, muted }: { label: string; url: string; muted?: boolean }) {
   return (
@@ -14,36 +17,47 @@ function Link({ label, url, muted }: { label: string; url: string; muted?: boole
   );
 }
 
-/** Styles, tempo, tracklist with the playing track highlighted, and the Discogs and YouTube links. */
+function Tag({ label, accent }: { label: string; accent?: boolean }) {
+  return (
+    <View
+      className={`mb-1.5 mr-1.5 rounded border px-2 py-0.5 ${accent ? "border-accent/60" : "border-line bg-surface-2"}`}
+    >
+      <Text className={`text-xs ${accent ? "text-accent" : "text-ink"}`}>{label}</Text>
+    </View>
+  );
+}
+
+/**
+ * Styles, tempo, tracklist with the playing track highlighted, the Discogs and YouTube links,
+ * and the Pro "more from" scopes (shown locked without Pro).
+ */
 export function RecordDetails({
   pick,
-  detail,
+  detail: anyDetail,
+  proFilters,
+  onScope,
 }: {
   pick: ShufflePick;
   detail: RecordDetail | null;
+  proFilters: boolean;
+  onScope: (scope: Scope) => void;
 }) {
+  // A late answer for an earlier pick never shows under this one.
+  const detail = detailFor(pick, anyDetail);
   const r = pick.record;
   const playing = pick.track?.position;
   return (
     <View testID="record-panel">
       <View className="mb-3 flex-row flex-wrap">
         {r.styles.map((s) => (
-          <View
-            key={s}
-            className="mb-1.5 mr-1.5 rounded border border-line bg-surface-2 px-2 py-0.5"
-          >
-            <Text className="text-xs text-ink">{s}</Text>
-          </View>
+          <Tag key={s} label={s} />
         ))}
         {pick.tempo ? (
-          <View className="mb-1.5 mr-1.5 rounded border border-line bg-surface-2 px-2 py-0.5">
-            <Text className="text-xs text-ink">
-              {Math.round(pick.tempo.bpm)} BPM
-              {pick.tempo.camelotKey ? ` · ${pick.tempo.camelotKey}` : ""}
-              {pick.tempo.source === "community" ? " · listener votes" : ""}
-            </Text>
-          </View>
+          <Tag
+            label={`${Math.round(pick.tempo.bpm)} BPM${pick.tempo.camelotKey ? ` · ${pick.tempo.camelotKey}` : ""}${pick.tempo.source === "community" ? " · listener votes" : ""}`}
+          />
         ) : null}
+        {pick.channel?.topic ? <Tag label="Topic channel" accent /> : null}
       </View>
       {detail && detail.tracklist.length > 0 ? (
         <View className="mb-3 rounded-md border border-line">
@@ -83,6 +97,47 @@ export function RecordDetails({
           {detail.videos.length === 1 ? "" : "s"}
         </Text>
       ) : null}
+      <MoreFrom pick={pick} detail={detail} proFilters={proFilters} onScope={onScope} />
+    </View>
+  );
+}
+
+function MoreFrom({
+  pick,
+  detail,
+  proFilters,
+  onScope,
+}: {
+  pick: ShufflePick;
+  detail: RecordDetail | null;
+  proFilters: boolean;
+  onScope: (scope: Scope) => void;
+}) {
+  const scopes = moreFromScopes(pick, detail);
+  return (
+    <View testID="more-from" className="mt-4">
+      <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-2">
+        Dig deeper
+      </Text>
+      <View className="flex-row flex-wrap">
+        {scopes.map((s) => (
+          <Chip
+            key={s.id}
+            testID={`scope-${s.id.split(":")[0]}`}
+            label={s.label}
+            hint={s.hint ?? undefined}
+            locked={!proFilters}
+            onPress={() => onScope(s)}
+          />
+        ))}
+      </View>
+      {proFilters ? null : (
+        <Pressable accessibilityRole="link" onPress={() => router.push("/account")}>
+          <Text className="text-xs text-accent underline">
+            Digging deeper into a release, channel, label or artist is a Pro tool.
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
