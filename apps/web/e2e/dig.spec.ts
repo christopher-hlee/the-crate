@@ -1,9 +1,18 @@
 // End to end: shuffle, play, favorites, crates, history, saved filters, comments, and the
 // Free/Pro split.
 
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, type Route, test } from "@playwright/test";
 import { clickSettled, settle, signIn, sql } from "./helpers";
 import { stubYouTube, ytCalls } from "./youtube-stub";
+
+type StubWindow = { __yt?: { players: { state: number; _set(s: number): void }[] } };
+
+/** Every pick the Dig screen has handed the player: loaded or only cued. */
+async function moves(page: Page) {
+  return (await ytCalls(page)).filter((c) => c.fn === "loadVideoById" || c.fn === "cueVideoById");
+}
+
+const isShuffle = (url: URL) => url.pathname === "/api/v1/shuffle";
 
 test.beforeEach(async ({ page }) => {
   await stubYouTube(page);
@@ -86,6 +95,56 @@ test("Free: the heart and F keep favorites; crates are a Pro tool", async ({ pag
   expect((await crate.json()).error.code).toBe("pro_required");
 });
 
+test("Free: S keeps a record in favorites and never takes it out", async ({ page }) => {
+  const userId = await signIn(page);
+  const favorites = async () =>
+    (await sql("select 1 from favorites where user_id = $1", [userId])).length;
+  await page.goto("/");
+  const heart = page.getByTestId("favorite");
+  await expect(heart).toBeEnabled();
+  await page.keyboard.press("s");
+  await expect(heart).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(favorites).toBe(1);
+  await page.keyboard.press("s");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Already in your favorites." }),
+  ).toBeVisible();
+  await expect(heart).toHaveAttribute("aria-pressed", "true");
+  expect(await favorites()).toBe(1);
+});
+
+test("a favorite that lands after the dig moved on leaves the new record's heart alone", async ({
+  page,
+}) => {
+  const userId = await signIn(page);
+  const held: Route[] = [];
+  await page.route(
+    (url) => url.pathname === "/api/v1/favorites",
+    (route) => (route.request().method() === "POST" ? void held.push(route) : route.fallback()),
+  );
+  await page.goto("/");
+  const heart = page.getByTestId("favorite");
+  await expect(heart).toBeEnabled();
+  await expect.poll(async () => (await moves(page)).length).toBe(1);
+  await heart.click();
+  await expect(heart).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => held.length).toBe(1);
+
+  await clickSettled(page.getByTestId("shuffle"));
+  await expect.poll(async () => (await moves(page)).length).toBe(2);
+  await expect(heart).toHaveAttribute("aria-pressed", "false");
+  const landed = page.waitForResponse(
+    (r) => r.url().endsWith("/api/v1/favorites") && r.request().method() === "POST",
+  );
+  await held[0]?.continue();
+  await landed;
+  await expect
+    .poll(async () => (await sql("select 1 from favorites where user_id = $1", [userId])).length)
+    .toBe(1);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 50))));
+  await expect(heart).toHaveAttribute("aria-pressed", "false");
+});
+
 test("signed out: favorites ask for a sign-in", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("favorite")).toBeEnabled();
@@ -119,6 +178,24 @@ test("Free: tempo, key and views are free; keyword, topic and more-from are Pro"
   await expect(moreFrom.getByRole("link", { name: "Go Pro" })).toBeVisible();
 });
 
+for (const who of ["signed out", "Free"] as const) {
+  test(`${who}: a link with Pro filters digs without them, with no error`, async ({ page }) => {
+    if (who === "Free") await signIn(page);
+    const statuses: number[] = [];
+    page.on("response", (r) => {
+      if (isShuffle(new URL(r.url()))) statuses.push(r.status());
+    });
+    await page.goto("/?q=psych&topic=1");
+    await expect(page.getByTestId("record-panel")).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "used Pro filters, so they were left out" }),
+    ).toBeVisible();
+    await expect(page).not.toHaveURL(/[?&](q|topic)=/);
+    expect(statuses.length).toBeGreaterThan(0);
+    expect(statuses).not.toContain(403);
+  });
+}
+
 test("Pro: keyword search, topic channels and more from this channel", async ({ page }) => {
   await signIn(page, { pro: true });
   const pickFor = async (q: string) => {
@@ -134,9 +211,20 @@ test("Pro: keyword search, topic channels and more from this channel", async ({ 
   );
 
   await page.goto("/");
+  await expect.poll(async () => (await moves(page)).length).toBe(1);
+  const playing = (await moves(page))[0]?.videoId;
   const moreFrom = page.getByTestId("more-from");
-  await moreFrom.getByRole("button", { name: /this release/ }).click();
+  await clickSettled(moreFrom.getByRole("button", { name: /this release/ }));
   await expect(page.getByTestId("scope-chips")).toContainText("This release");
+  // Digging inside the release keeps the video on screen out by its ID, signed in too.
+  const scoped = page.waitForRequest((r) => {
+    const url = new URL(r.url());
+    return isShuffle(url) && url.searchParams.has("record");
+  });
+  await clickSettled(page.getByTestId("shuffle"));
+  const sent = new URL((await scoped).url()).searchParams;
+  expect(sent.getAll("record")).toHaveLength(1);
+  expect(sent.getAll("seen")).toContain(playing);
 });
 
 test("Free: save, reload and apply a filter preset; Pro presets stay locked", async ({
@@ -170,6 +258,28 @@ test("Free: save, reload and apply a filter preset; Pro presets stay locked", as
   await expect(page.getByLabel("BPM from")).toHaveValue("90");
   await list.getByRole("button", { name: "Keyword preset", exact: true }).click();
   await expect(page.getByTestId("filter-drawer")).toContainText("That preset uses Pro filters.");
+
+  // A delete that fails keeps the preset and says why; it goes once the server deletes it.
+  const failDelete = (url: URL) => url.pathname.startsWith("/api/v1/saved-filters/");
+  await page.route(failDelete, (route) =>
+    route.request().method() === "DELETE"
+      ? route.fulfill({
+          status: 503,
+          json: { error: { code: "internal", message: "The crate is busy. Try again." } },
+        })
+      : route.fallback(),
+  );
+  await clickSettled(list.getByRole("button", { name: "Delete Mid tempo" }));
+  await expect(page.getByTestId("filter-drawer")).toContainText("The crate is busy. Try again.");
+  await expect(list).toContainText("Mid tempo");
+  await page.unroute(failDelete);
+  await clickSettled(list.getByRole("button", { name: "Delete Mid tempo" }));
+  await expect(list).not.toContainText("Mid tempo");
+  await expect
+    .poll(
+      async () => (await sql("select 1 from saved_filters where user_id = $1", [userId])).length,
+    )
+    .toBe(1);
 });
 
 test("comments: pick a display name, post, see the rank, links refused, delete", async ({
@@ -246,4 +356,75 @@ test("player settings: random start, hide comments, kept on this device", async 
   await expect(page.getByTestId("comments")).toHaveCount(0);
   await page.getByTestId("player-settings").getByText("Player settings").click();
   await expect(page.getByTestId("player-settings").getByLabel("Start at")).toHaveValue("random");
+});
+
+test("tempo taps, note drafts and comment drafts stay with their record", async ({ page }) => {
+  await signIn(page);
+  const named = await page.request.put("/api/v1/me/profile", {
+    data: { displayName: `Panels ${Date.now().toString(36)}` },
+  });
+  expect(named.ok()).toBe(true);
+  await page.goto("/");
+  await expect(page.getByTestId("record-panel")).toBeVisible();
+  await expect.poll(async () => (await moves(page)).length).toBe(1);
+
+  await clickSettled(page.getByRole("button", { name: "Tempo", exact: true }));
+  const tempo = page.getByTestId("tempo-panel");
+  for (let i = 0; i < 3; i++) await clickSettled(tempo.getByTestId("tap"));
+  await expect(tempo.getByTestId("tap-bpm")).toHaveText("3 / 4 taps");
+  await clickSettled(page.getByRole("button", { name: "Note", exact: true }));
+  await page.getByTestId("note-panel").getByLabel("Note").fill("Horn stab at the end");
+  const comment = page.getByTestId("comments").getByLabel("Comment");
+  await comment.fill("About the first record");
+
+  await clickSettled(page.getByTestId("shuffle"));
+  await expect.poll(async () => (await moves(page)).length).toBe(2);
+  await expect(page.getByTestId("tempo-panel")).toHaveCount(0);
+  await expect(comment).toHaveValue("");
+  await clickSettled(page.getByRole("button", { name: "Tempo", exact: true }));
+  await expect(page.getByTestId("tap-bpm")).toHaveText("0 / 4 taps");
+  await clickSettled(page.getByRole("button", { name: "Note", exact: true }));
+  await expect(page.getByTestId("note-panel").getByLabel("Note")).toHaveValue("");
+});
+
+test("one move at a time: skip-after, the video's end and N while the next pick loads", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.addInitScript(() =>
+    window.localStorage.setItem("crate.player", JSON.stringify({ skipAfter: 30 })),
+  );
+  // Hold every shuffle request, so the test decides when each answer arrives.
+  const held: Route[] = [];
+  await page.route(isShuffle, (route) => void held.push(route));
+  await page.goto("/");
+  await expect.poll(() => held.length).toBe(1);
+  await held.shift()?.continue();
+  await expect(page.getByTestId("record-panel")).toBeVisible();
+  // The prefetch for the pick after this one stays held, so the next move has to ask.
+  await expect.poll(() => held.length).toBe(1);
+  const player = (s: number) =>
+    page.evaluate((state) => (window as unknown as StubWindow).__yt?.players[0]?._set(state), s);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as StubWindow).__yt?.players[0]?.state))
+    .toBe(5);
+  const before = await moves(page);
+  expect(before).toHaveLength(1);
+
+  // Play past 0:30: skip-after asks for the next pick.
+  await player(1);
+  await page.clock.runFor(31_000);
+  await expect.poll(() => held.length).toBe(2);
+  // While that request is out, the video ends and N is pressed: neither asks again.
+  await player(0);
+  await page.keyboard.press("n");
+  await page.waitForTimeout(500);
+  expect(held.length).toBe(2);
+
+  for (const route of held.splice(0)) await route.continue();
+  await expect.poll(async () => (await moves(page)).length).toBe(2);
+  await page.waitForTimeout(500);
+  const after = await moves(page);
+  expect(after).toHaveLength(2);
+  expect(after[1]?.videoId).not.toBe(before[0]?.videoId);
 });
