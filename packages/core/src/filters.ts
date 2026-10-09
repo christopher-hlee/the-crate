@@ -4,12 +4,17 @@
 import { z } from "zod";
 import { CAMELOT_PATTERN, type CamelotKey } from "./camelot";
 import { hashHex, stableStringify } from "./hash";
+import { isRecordKey } from "./record-key";
 import { MAX_YEAR, MIN_YEAR } from "./years";
 
 const Label = z.string().trim().min(1).max(80);
 const Year = z.number().int().min(MIN_YEAR).max(MAX_YEAR);
 const Bpm = z.number().min(20).max(400);
 const DiscogsId = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+/** A YouTube channel ID (UC plus 22 characters). */
+export const CHANNEL_ID_PATTERN = /^UC[A-Za-z0-9_-]{22}$/;
+const ChannelId = z.string().regex(CHANNEL_ID_PATTERN);
+const RecordKey = z.string().refine(isRecordKey, "Invalid record key");
 export const CamelotKeySchema = z
   .string()
   .regex(CAMELOT_PATTERN)
@@ -33,10 +38,19 @@ export const FiltersSchema = z.strictObject({
   deepCutMin: z.number().min(0).max(1).optional(),
   labelIds: z.array(DiscogsId).max(10).optional(),
   artistIds: z.array(DiscogsId).max(10).optional(),
+  /** Keywords matched against record, artist, label, track and style names and the video's title and tags. */
+  q: z.string().trim().min(2).max(100).optional(),
+  /** Only videos from YouTube's auto-generated "Topic" channels (official audio uploads). */
+  topicOnly: z.boolean().optional(),
+  /** "More from this channel". */
+  channelIds: z.array(ChannelId).max(10).optional(),
+  /** "More from this release": every video linked to these records. */
+  recordKeys: z.array(RecordKey).max(10).optional(),
 });
 
 export type Filters = z.infer<typeof FiltersSchema>;
 
+// The digging filters are free; Pro adds power search and scopes (DECISIONS 35).
 export const FREE_FILTER_KEYS = [
   "genres",
   "styles",
@@ -44,19 +58,23 @@ export const FREE_FILTER_KEYS = [
   "yearTo",
   "countries",
   "formats",
-] as const satisfies readonly (keyof Filters)[];
-
-export const PRO_FILTER_KEYS = [
-  "formatDescriptions",
   "bpmFrom",
   "bpmTo",
   "halfDouble",
   "key",
   "compatibleKeys",
   "maxViews",
+] as const satisfies readonly (keyof Filters)[];
+
+export const PRO_FILTER_KEYS = [
+  "formatDescriptions",
   "deepCutMin",
   "labelIds",
   "artistIds",
+  "q",
+  "topicOnly",
+  "channelIds",
+  "recordKeys",
 ] as const satisfies readonly (keyof Filters)[];
 
 export type ProFilterKey = (typeof PRO_FILTER_KEYS)[number];
@@ -78,6 +96,12 @@ function uniqSorted<T extends string | number>(values: readonly T[] | undefined)
   return out;
 }
 
+/** Keywords compare case-insensitively with collapsed spaces; too-short ones are dropped. */
+function normalizeKeywords(q: string | undefined): string | undefined {
+  const v = q?.trim().replace(/\s+/g, " ").toLowerCase();
+  return v && v.length >= 2 ? v : undefined;
+}
+
 /**
  * Canonical form: arrays deduplicated and sorted, empty values dropped, reversed ranges
  * swapped, and modifiers without a base filter removed. Equal searches hash equally.
@@ -91,6 +115,10 @@ export function normalizeFilters(input: Filters): Filters {
     formatDescriptions: uniqSorted(input.formatDescriptions),
     labelIds: uniqSorted(input.labelIds),
     artistIds: uniqSorted(input.artistIds),
+    channelIds: uniqSorted(input.channelIds),
+    recordKeys: uniqSorted(input.recordKeys),
+    q: normalizeKeywords(input.q),
+    topicOnly: input.topicOnly ? true : undefined,
     yearFrom: input.yearFrom,
     yearTo: input.yearTo,
     bpmFrom: input.bpmFrom,
@@ -114,6 +142,25 @@ export function normalizeFilters(input: Filters): Filters {
   return f;
 }
 
+/**
+ * The normalized filters as a saved preset or a seeded crate stores them. Channel IDs come
+ * from the YouTube API, which we keep for at most 30 days (rule 7, DECISIONS 39), so a
+ * "More from this channel" scope only lives in the URL and the dig, never in a stored row.
+ */
+/** Why a filter set can't be saved as a preset or a seeded crate's filters, or null. */
+export const CHANNEL_SCOPE_NOT_SAVED =
+  'A "more from this channel" scope can\'t be saved: channel IDs are YouTube data we keep for 30 days at most. Remove the channel scope first.';
+
+export function hasChannelScope(input: Filters): boolean {
+  return (normalizeFilters(input).channelIds?.length ?? 0) > 0;
+}
+
+export function persistableFilters(input: Filters): Filters {
+  const f = normalizeFilters(input);
+  delete f.channelIds;
+  return f;
+}
+
 /** Stable cache key for a filter set. */
 export function filterHash(filters: Filters): string {
   return hashHex(stableStringify(normalizeFilters(filters)));
@@ -130,6 +177,8 @@ const LIST_PARAMS = {
   country: "countries",
   format: "formats",
   format_desc: "formatDescriptions",
+  channel: "channelIds",
+  record: "recordKeys",
 } as const;
 const ID_LIST_PARAMS = { label: "labelIds", artist: "artistIds" } as const;
 const NUMBER_PARAMS = {
@@ -140,7 +189,11 @@ const NUMBER_PARAMS = {
   max_views: "maxViews",
   deep_cut_min: "deepCutMin",
 } as const;
-const BOOL_PARAMS = { half_double: "halfDouble", compatible: "compatibleKeys" } as const;
+const BOOL_PARAMS = {
+  half_double: "halfDouble",
+  compatible: "compatibleKeys",
+  topic: "topicOnly",
+} as const;
 
 export const FILTER_PARAM_NAMES: readonly string[] = [
   ...Object.keys(LIST_PARAMS),
@@ -148,6 +201,7 @@ export const FILTER_PARAM_NAMES: readonly string[] = [
   ...Object.keys(NUMBER_PARAMS),
   ...Object.keys(BOOL_PARAMS),
   "key",
+  "q",
 ];
 
 export function filtersToSearchParams(input: Filters): [string, string][] {
@@ -167,6 +221,7 @@ export function filtersToSearchParams(input: Filters): [string, string][] {
     if (f[key]) out.push([param, "1"]);
   }
   if (f.key) out.push(["key", f.key]);
+  if (f.q) out.push(["q", f.q]);
   return out;
 }
 
@@ -197,5 +252,7 @@ export function filtersFromSearchParams(
   }
   const key = getAll("key")[0];
   if (key !== undefined) raw.key = key.toUpperCase();
+  const q = getAll("q")[0];
+  if (q !== undefined && q.trim() !== "") raw.q = q;
   return FiltersSchema.safeParse(raw);
 }

@@ -52,12 +52,30 @@ describe("filters", () => {
     expect(isEmptyFilter({ genres: [], halfDouble: true })).toBe(true);
   });
 
-  it("lists the Pro filters in use", () => {
+  it("lists the Pro filters in use: tempo, key and views are free", () => {
     expect(proFiltersUsed({ styles: ["House"], yearFrom: 1990 })).toEqual([]);
-    expect(proFiltersUsed({ bpmFrom: 120, key: "8A", labelIds: [], halfDouble: false })).toEqual([
-      "bpmFrom",
-      "key",
-    ]);
+    expect(
+      proFiltersUsed({ bpmFrom: 120, key: "8A", maxViews: 1000, compatibleKeys: true }),
+    ).toEqual([]);
+    expect(
+      proFiltersUsed({
+        labelIds: [],
+        halfDouble: false,
+        q: "drum break",
+        topicOnly: true,
+        recordKeys: ["m:1"],
+      }),
+    ).toEqual(["q", "topicOnly", "recordKeys"]);
+  });
+
+  it("normalises keywords and drops empty scopes", () => {
+    expect(normalizeFilters({ q: "  Drum   BREAK ", topicOnly: false, channelIds: [] })).toEqual({
+      q: "drum break",
+    });
+    expect(FiltersSchema.safeParse({ q: "a" }).success).toBe(false);
+    expect(FiltersSchema.safeParse({ channelIds: ["not-a-channel"] }).success).toBe(false);
+    expect(FiltersSchema.safeParse({ recordKeys: ["x:1"] }).success).toBe(false);
+    expect(filterHash({ q: "Funk  Break" })).toBe(filterHash({ q: "funk break" }));
   });
 
   it("round-trips through query parameters, including commas in names", () => {
@@ -78,6 +96,10 @@ describe("filters", () => {
       deepCutMin: 0.7,
       labelIds: [5, 3],
       artistIds: [1],
+      q: "Drum break",
+      topicOnly: true,
+      channelIds: ["UCabcdefghijklmnopqrstuv"],
+      recordKeys: ["m:42", "r:7"],
     };
     expect(roundTrip(f)).toEqual(normalizeFilters(f));
   });

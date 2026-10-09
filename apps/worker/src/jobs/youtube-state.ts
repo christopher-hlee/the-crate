@@ -17,18 +17,23 @@ export async function applyChecks(
     thumbnail_url: c.thumbnailUrl,
     region_allowed: c.regionAllowed,
     region_blocked: c.regionBlocked,
+    channel_id: c.channelId,
+    channel_title: c.channelTitle,
+    tags: c.tags,
   }));
   const res = await db.query<{ video_id: string }>(
     `with c as (
        select * from jsonb_to_recordset($1::jsonb) as x(
          video_id text, status text, title text, duration_s int, view_count bigint,
-         thumbnail_url text, region_allowed text[], region_blocked text[])
+         thumbnail_url text, region_allowed text[], region_blocked text[],
+         channel_id text, channel_title text, tags text[])
      ),
      prev as (select y.video_id, y.status from yt_videos y join c using (video_id)),
      upd as (
        update yt_videos y set status = c.status, title = c.title, duration_s = c.duration_s,
               view_count = c.view_count, thumbnail_url = c.thumbnail_url,
-              region_allowed = c.region_allowed, region_blocked = c.region_blocked, checked_at = now()
+              region_allowed = c.region_allowed, region_blocked = c.region_blocked,
+              channel_id = c.channel_id, channel_title = c.channel_title, tags = c.tags, checked_at = now()
          from c where y.video_id = c.video_id
        returning y.video_id, y.status
      )

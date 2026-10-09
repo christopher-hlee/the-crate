@@ -64,6 +64,15 @@ describe("videosList", () => {
       thumbnailUrl: "https://i.ytimg.com/vi/GlassHarb01/mqdefault.jpg",
       regionAllowed: null,
       regionBlocked: ["AT", "DE"],
+      channelId: "UCmarloVennTopicArchive0",
+      channelTitle: "Marlo Venn - Topic",
+      tags: ["Marlo Venn", "Glass Harbour", "deep house"],
+    });
+    // A malformed channel ID is dropped rather than stored.
+    expect(byId.NightFerry1).toMatchObject({
+      channelId: null,
+      channelTitle: "Ferry uploads",
+      tags: null,
     });
     expect(byId.NightFerry1?.regionAllowed).toEqual(["CA", "US"]);
     expect(byId.NightFerry1?.thumbnailUrl).toBe("https://i.ytimg.com/vi/NightFerry1/default.jpg");

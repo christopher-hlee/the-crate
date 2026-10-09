@@ -14,6 +14,9 @@ export const VideoItemSchema = z.object({
     .object({
       title: z.string().optional(),
       thumbnails: z.record(z.string(), Thumbnail).optional(),
+      channelId: z.string().optional(),
+      channelTitle: z.string().optional(),
+      tags: z.array(z.string()).optional(),
     })
     .optional(),
   contentDetails: z

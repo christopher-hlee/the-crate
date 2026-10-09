@@ -9,7 +9,7 @@ import { ApiErrorSchema, VideosListResponseSchema } from "./schema";
 export const VIDEOS_LIST_URL = "https://www.googleapis.com/youtube/v3/videos";
 export const VIDEOS_LIST_PARTS = "snippet,contentDetails,status,statistics";
 export const VIDEOS_LIST_FIELDS =
-  "items(id,snippet(title,thumbnails),contentDetails(duration,regionRestriction),status(uploadStatus,privacyStatus,embeddable,madeForKids),statistics(viewCount))";
+  "items(id,snippet(title,thumbnails,channelId,channelTitle,tags),contentDetails(duration,regionRestriction),status(uploadStatus,privacyStatus,embeddable,madeForKids),statistics(viewCount))";
 
 export class QuotaExceededError extends Error {
   constructor(message = "YouTube Data API quota exceeded") {

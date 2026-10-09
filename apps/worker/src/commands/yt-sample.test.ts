@@ -36,6 +36,9 @@ describe("summaries", () => {
       thumbnailUrl: null,
       regionAllowed: null,
       regionBlocked: null,
+      channelId: null,
+      channelTitle: null,
+      tags: null,
     };
     const r = summarise(
       [

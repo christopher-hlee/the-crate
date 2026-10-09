@@ -169,11 +169,12 @@ beforeAll(async () => {
     client.release();
   }
   await t.pool.query(`
-    insert into yt_videos (video_id, dump_embed_flag, status, view_count, region_blocked, region_allowed, first_seen_dump) values
-      ('vid00000001', true, 'playable', 500, '{DE}', null, '2026-10-01'),
-      ('vid00000002', true, 'playable', 5000000, null, null, '2026-10-01'),
-      ('vid00000003', true, 'playable', 100, null, '{DE,AT}', '2026-10-01'),
-      ('vid00000004', true, 'playable', 20, null, null, '2026-10-01')`);
+    insert into yt_videos (video_id, dump_embed_flag, status, view_count, region_blocked, region_allowed, first_seen_dump,
+                           title, tags, channel_id, channel_title) values
+      ('vid00000001', true, 'playable', 500, '{DE}', null, '2026-10-01', 'Deep groove (vinyl rip)', '{"drum break"}', null, 'Diggers Paradise'),
+      ('vid00000002', true, 'playable', 5000000, null, null, '2026-10-01', null, null, null, null),
+      ('vid00000003', true, 'playable', 100, null, '{DE,AT}', '2026-10-01', 'Tresor live', null, 'UCaaaaaaaaaaaaaaaaaaaaaa', 'Club archive'),
+      ('vid00000004', true, 'playable', 20, null, null, '2026-10-01', 'Boogaloo', null, 'UCbbbbbbbbbbbbbbbbbbbbbb', 'Some Band - Topic')`);
   await t.pool.query(
     "insert into history (user_id, played_at, record_key, video_id) values ($1, now(), 'r:6', 'vid00000007')",
     [USER],
@@ -243,6 +244,24 @@ describe("unseeded pick", () => {
       "vid00000003",
       "vid00000004",
     ]);
+    expect(await reachable({ recordKeys: ["m:1"] })).toEqual(["vid00000001", "vid00000002"]);
+    expect(await reachable({ topicOnly: true })).toEqual(["vid00000004"]);
+    expect(await reachable({ channelIds: ["UCaaaaaaaaaaaaaaaaaaaaaa"] })).toEqual(["vid00000003"]);
+  });
+
+  it("matches keywords as word prefixes in Discogs names and in the video's title and tags", async () => {
+    // Discogs: styles and genres.
+    expect(await reachable({ q: "boogaloo" })).toEqual(["vid00000004"]);
+    expect(await reachable({ q: "tech" })).toEqual(["vid00000003"]);
+    expect(await reachable({ q: "latin boog" })).toEqual(["vid00000004"]);
+    // YouTube: tags and title.
+    expect(await reachable({ q: "drum" })).toEqual(["vid00000001"]);
+    expect(await reachable({ q: "tresor" })).toEqual(["vid00000003"]);
+    expect(await reachable({ q: "nothing-like-this" })).toEqual([]);
+    // Operators in user text are stripped, never interpreted. Every word must match in the same
+    // source: the Discogs names or the video's title and tags.
+    expect(await reachable({ q: "drum | !break" })).toEqual(["vid00000001"]);
+    expect(await reachable({ q: "drum house" })).toEqual([]);
   });
 
   it("respects session, client-seen and history exclusions", async () => {

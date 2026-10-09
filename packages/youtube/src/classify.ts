@@ -15,6 +15,10 @@ export type VideoCheck = {
   thumbnailUrl: string | null;
   regionAllowed: string[] | null;
   regionBlocked: string[] | null;
+  /** The uploading channel and the video's tags: filters only ("topic", "more from", keywords). */
+  channelId: string | null;
+  channelTitle: string | null;
+  tags: string[] | null;
 };
 
 const DEAD_UPLOAD = new Set(["deleted", "failed", "rejected"]);
@@ -53,7 +57,22 @@ function empty(videoId: string, status: CheckedStatus): VideoCheck {
     thumbnailUrl: null,
     regionAllowed: null,
     regionBlocked: null,
+    channelId: null,
+    channelTitle: null,
+    tags: null,
   };
+}
+
+const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
+
+/** At most 50 tags of at most 100 characters: enough for keyword matching, bounded in size. */
+function cleanTags(tags: string[] | undefined): string[] | null {
+  if (!tags || tags.length === 0) return null;
+  return tags
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 50)
+    .map((t) => t.slice(0, 100));
 }
 
 export function classifyItem(item: VideoItem): VideoCheck {
@@ -72,6 +91,12 @@ export function classifyItem(item: VideoItem): VideoCheck {
     thumbnailUrl: thumbnail(item),
     regionAllowed: countryCodes(item.contentDetails?.regionRestriction?.allowed),
     regionBlocked: countryCodes(item.contentDetails?.regionRestriction?.blocked),
+    channelId:
+      item.snippet?.channelId && CHANNEL_ID.test(item.snippet.channelId)
+        ? item.snippet.channelId
+        : null,
+    channelTitle: item.snippet?.channelTitle?.slice(0, 200) ?? null,
+    tags: cleanTags(item.snippet?.tags),
   };
 }
 

@@ -72,7 +72,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await t.pool.query(
-    "truncate yt_videos, record_videos, video_reports, yt_quota_usage, link_suggestions, account_deletions, history, crates, crate_items, crate_assets, asset_chops, notes, subscriptions",
+    "truncate yt_videos, record_videos, video_reports, yt_quota_usage, link_suggestions, account_deletions, history, crates, crate_items, crate_assets, asset_chops, notes, subscriptions, favorites, saved_filters, comment_reports, comments, profiles",
   );
 });
 
@@ -80,6 +80,9 @@ describe("purge_yt_data (compliance test 6)", () => {
   it("nulls YouTube data not refreshed in 30 days and takes those videos out of the shuffle", async () => {
     await seedVideo("old00000001", { checkedDaysAgo: 31 });
     await seedVideo("new00000001", { checkedDaysAgo: 5, recordKey: "r:2" });
+    await t.pool.query(
+      "update yt_videos set channel_id = 'UCaaaaaaaaaaaaaaaaaaaaaa', channel_title = 'X - Topic', tags = '{a,b}'",
+    );
     const res = await runPurge(t.pool);
     expect(res).toEqual({ purged: 1, unplayable: 1 });
     const [old] = await q("select * from yt_videos where video_id = 'old00000001'");
@@ -91,6 +94,9 @@ describe("purge_yt_data (compliance test 6)", () => {
       thumbnail_url: null,
       region_allowed: null,
       region_blocked: null,
+      channel_id: null,
+      channel_title: null,
+      tags: null,
       checked_at: null,
     });
     const [fresh] = await q("select title, status from yt_videos where video_id = 'new00000001'");

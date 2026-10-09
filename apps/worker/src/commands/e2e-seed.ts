@@ -60,7 +60,11 @@ export async function e2eSeed(options: {
     await pool.query(
       `update yt_videos set status = case when video_id in ('LowTideDub9', 'CalleOcho_1') then 'not_embeddable' else 'playable' end,
               title = 'Video ' || video_id, duration_s = 240, view_count = (abs(hashtext(video_id)) % 50000),
-              thumbnail_url = null, checked_at = now()`,
+              thumbnail_url = null, checked_at = now(),
+              channel_id = 'UCe2eChannel' || lpad((abs(hashtext(video_id)) % 4)::text, 12, '0'),
+              channel_title = case when abs(hashtext(video_id)) % 4 = 0 then 'Seed Artist - Topic'
+                                   else 'Seed Channel ' || (abs(hashtext(video_id)) % 4) end,
+              tags = array['crate', 'seedtag' || (abs(hashtext(video_id)) % 4)]`,
     );
     await syncPlayable(pool);
     await refreshLatestCensus(pool);
