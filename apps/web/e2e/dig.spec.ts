@@ -225,6 +225,19 @@ test("Pro: keyword search, topic channels and more from this channel", async ({ 
   const sent = new URL((await scoped).url()).searchParams;
   expect(sent.getAll("record")).toHaveLength(1);
   expect(sent.getAll("seen")).toContain(playing);
+
+  // The server digs inside the scoped release even though it was just in this session, and
+  // returns another of its videos.
+  const [multi] = await sql<{ record_key: string; video_id: string }>(
+    `select record_key, min(video_id) as video_id from record_videos where playable
+      group by record_key having count(distinct video_id) > 1 limit 1`,
+  );
+  const rk = encodeURIComponent(multi?.record_key ?? "");
+  const scopedPick = await (
+    await page.request.get(`/api/v1/shuffle?record=${rk}&session=${rk}&seen=${multi?.video_id}`)
+  ).json();
+  expect(scopedPick.pick?.recordKey).toBe(multi?.record_key);
+  expect(scopedPick.pick?.videoId).not.toBe(multi?.video_id);
 });
 
 test("Free: save, reload and apply a filter preset; Pro presets stay locked", async ({

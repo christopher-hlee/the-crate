@@ -2,7 +2,7 @@
 
 import { ApiError, type FavoriteItem } from "@app/api-client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFavoriteStore } from "@/components/FavoriteButton";
 import { ItemListPlayer } from "@/components/ItemListPlayer";
 import { ItemNote } from "@/components/ItemNote";
@@ -32,8 +32,6 @@ export default function FavoritesPage() {
   const [busy, setBusy] = useState(false);
   /** Rows hearted off on this visit. They stay in place so the heart can put them back. */
   const [unfavorited, setUnfavorited] = useState<ReadonlySet<string>>(() => new Set());
-  /** Net removals since the last page load. The cursor is an offset, so they shift it back. */
-  const removedSince = useRef(0);
 
   useEffect(() => {
     if (!userId) return;
@@ -43,7 +41,6 @@ export default function FavoritesPage() {
       .then((r) => {
         if (cancelled) return;
         store.set(r.items, true);
-        removedSince.current = 0;
         setItems(r.items);
         setCursor(r.nextCursor);
         setTotal(r.total);
@@ -73,13 +70,11 @@ export default function FavoritesPage() {
     setBusy(true);
     setError(null);
     try {
-      const offset = Number.parseInt(cursor, 10);
-      const r = await api.favorites(
-        Number.isNaN(offset) ? cursor : String(Math.max(0, offset - removedSince.current)),
-      );
-      removedSince.current = 0;
+      // The cursor is opaque (a keyset on when each favorite was added), so rows removed or
+      // added on this visit never shift the next page.
+      const r = await api.favorites(cursor);
       store.set(r.items, true);
-      // Shifted offsets can repeat a few rows; keep each once.
+      // A record hearted again on this visit moves to the top; keep each row once.
       const have = new Set((items ?? []).map(keyOf));
       setItems([...(items ?? []), ...r.items.filter((i) => !have.has(keyOf(i)))]);
       setCursor(r.nextCursor);
@@ -101,7 +96,6 @@ export default function FavoritesPage() {
       return next;
     });
     // Removing a favorite drops its stored note; hearting it again restores the note.
-    removedSince.current = Math.max(0, removedSince.current + (favorited ? -1 : 1));
     if (favorited && item.note) {
       try {
         await api.setFavoriteNote(refOf(item), item.note);
