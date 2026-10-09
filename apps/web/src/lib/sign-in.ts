@@ -1,7 +1,7 @@
 // Sign-in helpers shared by the login page, the auth callback and every "Sign in" link.
 // Plain functions (no "use client"), so server route handlers can import them too.
 
-import type { Provider } from "@supabase/supabase-js";
+import type { EmailOtpType, Provider } from "@supabase/supabase-js";
 
 /** Minimum length for a new password, at sign-up and on /account/password. */
 export const MIN_PASSWORD_LENGTH = 8;
@@ -95,9 +95,137 @@ export function parseAuthProviders(raw: string | null | undefined): OAuthProvide
   return out;
 }
 
-/** Supabase error text from a redirect, trimmed so a crafted link can't fill the page. */
+const GENERIC_AUTH_ERROR = "Sign-in didn't complete. Try again.";
+
+/**
+ * Fixed words for the sign-in errors we expect: the callback's own codes, the OAuth `error`
+ * values and Supabase's error codes. The login page only ever shows these, never text from the
+ * URL, so a crafted link can't put its own message on the sign-in page.
+ */
+const AUTH_ERROR_COPY = {
+  // The callback's own.
+  not_configured: "Sign-in isn't configured on this server.",
+  incomplete_link: "That sign-in link is incomplete. Request a new one.",
+  // OAuth providers (`error`).
+  access_denied: "Sign-in was cancelled or refused. Try again.",
+  temporarily_unavailable: "Sign-in is busy right now. Try again in a moment.",
+  // Supabase (`error_code`, or AuthError.code).
+  otp_expired: "That link has expired or was already used. Request a new one.",
+  otp_disabled: "Email links are turned off. Sign in with your password instead.",
+  bad_jwt: "Your session couldn't be checked. Sign in again.",
+  session_expired: "Your session has expired. Sign in again.",
+  flow_state_expired: "That sign-in took too long. Start again.",
+  flow_state_not_found: "That sign-in has already finished or expired. Start again.",
+  bad_code_verifier:
+    "Open the link in the browser you asked for it from, or request a new one here.",
+  bad_oauth_state: "That sign-in didn't match this browser. Start again.",
+  bad_oauth_callback: "The sign-in provider sent back an incomplete answer. Try again.",
+  signup_disabled: "New accounts can't be created right now.",
+  email_not_confirmed: "Confirm your email first: the link is in your inbox.",
+  invalid_credentials: "That email and password don't match.",
+  user_banned: "This account can't sign in.",
+  user_already_exists: "There's already an account with that email. Sign in instead.",
+  email_exists: "There's already an account with that email. Sign in instead.",
+  email_address_invalid: "That email address can't be used. Try another.",
+  provider_disabled: "That sign-in method is turned off.",
+  email_provider_disabled: "Email sign-in is turned off.",
+  over_email_send_rate_limit: "Too many emails were sent. Wait a few minutes and try again.",
+  over_request_rate_limit: "Too many tries. Wait a few minutes and try again.",
+} as const satisfies Record<string, string>;
+
+export type AuthErrorCode = keyof typeof AUTH_ERROR_COPY;
+
+export function isAuthErrorCode(raw: string | null | undefined): raw is AuthErrorCode {
+  return typeof raw === "string" && Object.hasOwn(AUTH_ERROR_COPY, raw);
+}
+
+/** The first known code among `candidates`, or "callback" (shown as a generic message). */
+export function authErrorCode(
+  ...candidates: (string | null | undefined)[]
+): AuthErrorCode | "callback" {
+  return candidates.find(isAuthErrorCode) ?? "callback";
+}
+
+/** The fixed message for an error code; anything unknown gets a generic one. */
+export function authErrorMessage(code: string | null | undefined): string {
+  return isAuthErrorCode(code) ? AUTH_ERROR_COPY[code] : GENERIC_AUTH_ERROR;
+}
+
+/**
+ * The message for a failed sign-in redirect (query string or fragment). Supabase sends
+ * `error`, `error_code` and `error_description`: only the codes are read, and only known codes
+ * get their own words. error_description is never shown, since anyone can write it into a link.
+ */
 export function authErrorText(params: URLSearchParams): string | null {
-  const description = params.get("error_description")?.trim();
-  if (description) return description.slice(0, 300);
-  return params.get("error") ? "Sign-in didn't complete. Try again." : null;
+  if (!["error", "error_code", "error_description"].some((k) => params.has(k))) return null;
+  return authErrorMessage(authErrorCode(params.get("error_code"), params.get("error")));
+}
+
+/** /login showing the fixed message for `code`, keeping `next`. */
+export function loginErrorPath(code: AuthErrorCode | "callback", next: string): string {
+  const params = new URLSearchParams({ error: code });
+  const safe = safeNextPath(next);
+  if (safe !== "/") params.set("next", safe);
+  return `/login?${params}`;
+}
+
+/** Supabase's email link types (EmailOtpType), for links that carry a token_hash. */
+const EMAIL_LINK_TYPES = [
+  "signup",
+  "invite",
+  "magiclink",
+  "recovery",
+  "email_change",
+  "email",
+] as const satisfies readonly EmailOtpType[];
+
+export type EmailLinkType = (typeof EMAIL_LINK_TYPES)[number];
+
+export function emailLinkType(raw: string | null | undefined): EmailLinkType | null {
+  return EMAIL_LINK_TYPES.find((t) => t === raw) ?? null;
+}
+
+/** An email link's token_hash, when it is there and of a sane length. */
+export function emailLinkToken(raw: string | null | undefined): string | null {
+  return raw && raw.length <= 512 ? raw : null;
+}
+
+/** Where an email link goes once verified: a safe `next`, or after a reset link, the password page. */
+export function emailLinkNext(type: EmailLinkType | null, next: string | null | undefined): string {
+  return safeNextPath(next, type === "recovery" ? "/account/password" : "/");
+}
+
+/**
+ * The confirmation page for an email link that carries a token_hash. Opening the link never
+ * signs anyone in: that page asks for a click, which POSTs the token to /auth/verify. A mail
+ * scanner can't use the link up, and a link someone else sends can't quietly sign a visitor
+ * into the sender's account.
+ */
+export function emailConfirmPath(tokenHash: string, type: EmailLinkType, next: string): string {
+  const params = new URLSearchParams({ token_hash: tokenHash, type });
+  const safe = safeNextPath(next);
+  if (safe !== "/") params.set("next", safe);
+  return `/auth/confirm?${params}`;
+}
+
+function originOf(raw: string): string | null {
+  try {
+    const origin = new URL(raw).origin;
+    return origin === "null" ? null : origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a form POST came from one of our own pages: its Origin header, or when a browser
+ * leaves that out, its Referer, must be one of `origins`. A request with neither is refused.
+ */
+export function isSameOriginPost(
+  headers: Pick<Headers, "get">,
+  origins: readonly string[],
+): boolean {
+  const source = headers.get("origin") ?? headers.get("referer");
+  const from = source ? originOf(source) : null;
+  return from !== null && origins.some((o) => originOf(o) === from);
 }

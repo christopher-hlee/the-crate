@@ -121,3 +121,33 @@ Set `EXPO_PUBLIC_SENTRY_DSN` in the EAS environment to turn on Sentry in the app
 `@sentry/react-native/expo` plugin uploads source maps during EAS builds when `SENTRY_AUTH_TOKEN`,
 `SENTRY_ORG` and `SENTRY_PROJECT` are set; without them, set `SENTRY_DISABLE_AUTO_UPLOAD=true` so
 the build doesn't try.
+
+## Sign-in emails and errors (Supabase)
+
+In the Supabase dashboard, add `https://<domain>/auth/callback` to the Redirect URLs. The default
+email templates use `{{ .ConfirmationURL }}`, which comes back to `/auth/callback?code=…`. That
+PKCE code only works in the browser that asked for the email.
+
+For links that also work on another device, point the templates (Authentication → Email
+Templates) at the callback with a token hash:
+
+| Template | Link |
+| --- | --- |
+| Magic link | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email` |
+| Confirm signup | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup` |
+| Reset password | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` |
+| Invite user | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite` |
+| Change email | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change` |
+
+Opening such a link never signs anyone in. `/auth/callback` sends it on to `/auth/confirm`, which
+asks for a click. The button POSTs to `/auth/verify`, which verifies the token only when the
+request's `Origin` (or its `Referer`, if `Origin` is missing) is the site's own origin or
+`NEXT_PUBLIC_APP_URL`. Everything else gets a 403. This stops mail scanners from using links up,
+and stops a link someone else sends from signing a visitor into the sender's account. Behind a
+proxy that rewrites the host, set `NEXT_PUBLIC_APP_URL` to the public origin, or every click
+gets a 403. These links don't carry `next`, so people land on `/`, or on `/account/password`
+after a reset.
+
+`/login` shows fixed words for the error codes listed in `AUTH_ERROR_COPY`
+(`apps/web/src/lib/sign-in.ts`) and a generic message for anything else. It never shows the
+`error_description` from a link. To give a new Supabase error code its own message, add it there.

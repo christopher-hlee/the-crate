@@ -403,3 +403,13 @@ YouTube data appears in either.
 
 A shared crate shows its records to anyone, but the owner's notes on items are left out of the
 public response.
+
+## 48. Email links ask for a click; sign-in errors use fixed words
+
+This amends entry 45. An email link that carries a `token_hash` (from custom Supabase email
+templates) doesn't sign anyone in when it is opened. `/auth/callback` sends it to
+`/auth/confirm`, and that page's button POSTs to `/auth/verify`. Only same-origin POSTs are
+verified. This blocks login CSRF, where a link signs the visitor into someone else's account, and
+it stops mail scanners from using links up. OAuth and PKCE `code` links work as before.
+The login page shows fixed words for known Supabase error codes and a generic message for any
+other code. It never shows the `error_description` text from a link.
