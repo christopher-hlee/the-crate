@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const auth = { exchangeCodeForSession: vi.fn(), verifyOtp: vi.fn() };
 const supabaseFromCookies = vi.fn();
 vi.mock("@/server/auth", () => ({ supabaseFromCookies }));
+const appEnv: { NEXT_PUBLIC_APP_URL?: string } = {};
+vi.mock("@/server/env", () => ({ env: () => appEnv }));
 
 const { GET } = await import("./route");
 
@@ -12,40 +14,33 @@ const location = (res: Response) => new URL(res.headers.get("location") ?? "", O
 
 beforeEach(() => {
   vi.clearAllMocks();
+  delete appEnv.NEXT_PUBLIC_APP_URL;
   supabaseFromCookies.mockResolvedValue({ auth });
   auth.exchangeCodeForSession.mockResolvedValue({ error: null });
 });
 
 describe("GET /auth/callback", () => {
-  it("never verifies a token_hash: it goes to the confirmation page instead", async () => {
-    const res = await call("token_hash=abc123&type=magiclink&next=%2Fcrates");
-    expect(res.status).toBe(307);
-    const to = location(res);
-    expect(to.origin).toBe(ORIGIN);
-    expect(to.pathname).toBe("/auth/confirm");
-    expect(Object.fromEntries(to.searchParams)).toEqual({
-      token_hash: "abc123",
-      type: "magiclink",
-      next: "/crates",
-    });
-    expect(auth.verifyOtp).not.toHaveBeenCalled();
-    expect(supabaseFromCookies).not.toHaveBeenCalled();
-    expect(res.headers.get("set-cookie")).toBeNull();
-  });
-
-  it("sends a reset link to the password page by default", async () => {
-    const to = location(await call("token_hash=abc&type=recovery"));
-    expect(to.pathname).toBe("/auth/confirm");
-    expect(to.searchParams.get("next")).toBe("/account/password");
-  });
-
-  it("refuses unknown link types and missing tokens", async () => {
-    for (const query of ["token_hash=abc&type=sms", "token_hash=abc", "type=magiclink", ""]) {
-      const to = location(await call(query));
+  it("never verifies a bare token_hash: only PKCE codes sign anyone in", async () => {
+    for (const query of [
+      "token_hash=abc123&type=magiclink&next=%2Fcrates",
+      "token_hash=abc&type=recovery",
+      "type=magiclink",
+      "",
+    ]) {
+      const res = await call(query);
+      const to = location(res);
       expect(to.pathname).toBe("/login");
       expect(to.searchParams.get("error")).toBe("incomplete_link");
+      expect(res.headers.get("set-cookie")).toBeNull();
     }
     expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(supabaseFromCookies).not.toHaveBeenCalled();
+  });
+
+  it("redirects to the public origin behind a proxy that rewrites the host", async () => {
+    appEnv.NEXT_PUBLIC_APP_URL = "https://public.example";
+    const res = await GET(new Request("http://localhost:3000/auth/callback?code=c&next=%2Fcrates"));
+    expect(res.headers.get("location")).toBe("https://public.example/crates");
   });
 
   it("exchanges a PKCE code and goes to next", async () => {

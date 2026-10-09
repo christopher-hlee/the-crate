@@ -6,7 +6,14 @@ import {
   type SavedFilter,
   type StylesResponse,
 } from "@app/api-client";
-import { type Filters, isEmptyFilter, normalizeFilters, proFiltersUsed } from "@app/core";
+import {
+  CHANNEL_SCOPE_NOT_SAVED,
+  type Filters,
+  hasChannelScope,
+  isEmptyFilter,
+  normalizeFilters,
+  proFiltersUsed,
+} from "@app/core";
 import { Lock, X } from "lucide-react";
 import Link from "next/link";
 import { type RefObject, useEffect, useMemo, useState } from "react";
@@ -617,6 +624,8 @@ function SavedFilters({
       .catch(() => setItems([]));
   }, []);
   const empty = isEmptyFilter(filters);
+  // A channel scope is YouTube data we don't keep, so a set with one can't be saved.
+  const channel = hasChannelScope(filters);
   const save = async () => {
     setError(null);
     try {
@@ -646,21 +655,22 @@ function SavedFilters({
         className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          if (name.trim() && !empty) void save();
+          if (name.trim() && !empty && !channel) void save();
         }}
       >
         <Input
           placeholder={empty ? "Set some filters first" : "Name these filters"}
           value={name}
           maxLength={60}
-          disabled={empty}
+          disabled={empty || channel}
           onChange={(e) => setName(e.target.value)}
           aria-label="Saved filter name"
         />
-        <Button type="submit" size="sm" disabled={empty || !name.trim()}>
+        <Button type="submit" size="sm" disabled={empty || channel || !name.trim()}>
           Save
         </Button>
       </form>
+      {channel && <p className="text-xs text-ink-2">{CHANNEL_SCOPE_NOT_SAVED}</p>}
       {error && (
         <p role="status" className="text-xs text-warn">
           {error}

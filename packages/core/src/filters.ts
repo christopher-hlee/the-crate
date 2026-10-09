@@ -147,6 +147,14 @@ export function normalizeFilters(input: Filters): Filters {
  * from the YouTube API, which we keep for at most 30 days (rule 7, DECISIONS 39), so a
  * "More from this channel" scope only lives in the URL and the dig, never in a stored row.
  */
+/** Why a filter set can't be saved as a preset or a seeded crate's filters, or null. */
+export const CHANNEL_SCOPE_NOT_SAVED =
+  'A "more from this channel" scope can\'t be saved: channel IDs are YouTube data we keep for 30 days at most. Remove the channel scope first.';
+
+export function hasChannelScope(input: Filters): boolean {
+  return (normalizeFilters(input).channelIds?.length ?? 0) > 0;
+}
+
 export function persistableFilters(input: Filters): Filters {
   const f = normalizeFilters(input);
   delete f.channelIds;

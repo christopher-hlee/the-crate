@@ -296,8 +296,8 @@ with no foreign keys into catalog tables. The heart or F toggles a favorite; S o
 picker on Pro and favorites on Free. Favorites feed "For you" and Trending (41) and count
 toward rank (37). The list pages newest first with an opaque keyset cursor (added at, record
 key, video ID), so removing favorites while scrolling never skips any. Saved filter sets are
-stored as the same normalized filter object the URL uses, minus any channel scope (39), so a
-preset that includes Pro filters stays visible but locked on Free.
+stored as the same normalized filter object the URL uses (a set with a channel scope can't be
+saved, 39), so a preset that includes Pro filters stays visible but locked on Free.
 
 ## 37. Comments, display names and ranks
 
@@ -333,8 +333,9 @@ The worker's existing `videos.list` call already returns `snippet.channelId`, `c
 `tags`, so adding them costs no quota. They live in `yt_videos` with the other API data, are
 refreshed with it and nulled by the purge within 30 days, and are used only as filters (topic
 channels, more from this channel, keywords). They never feed a score, a rank or Trending. A
-channel scope lives only in the URL and the current dig: saved filter sets and seeded crates
-are stored without it, so no channel ID outlives the purge in a user table.
+channel scope lives only in the URL and the current dig. Saving a filter set or seeding a crate
+with one is refused with an explanation (never silently dropped, which would store a broader
+search than the one on screen), so no channel ID outlives the purge in a user table.
 
 ## 40. YouTube playlists: a link out, Play all, and no API export yet
 
@@ -445,12 +446,13 @@ report it with a timely response, and a published contact point.
   set, `support@example.com` shows, marked as a placeholder. The Terms gain "What you post": the
   rules, removal and suspension, how to report and block, and the contact.
 
-## 49. Email links ask for a click; sign-in errors use fixed words
+## 49. Email links use PKCE only; sign-in errors use fixed words
 
-This amends entry 45. An email link that carries a `token_hash` (from custom Supabase email
-templates) doesn't sign anyone in when it is opened. `/auth/callback` sends it to
-`/auth/confirm`, and that page's button POSTs to `/auth/verify`. Only same-origin POSTs are
-verified. This blocks login CSRF, where a link signs the visitor into someone else's account, and
-it stops mail scanners from using links up. OAuth and PKCE `code` links work as before.
-The login page shows fixed words for known Supabase error codes and a generic message for any
-other code. It never shows the `error_description` text from a link.
+This amends entry 45. `/auth/callback` accepts only PKCE `code` links, from OAuth and from
+Supabase's default email templates. A code works only in the browser or app that asked for the
+email, so a link someone else sends can't sign a visitor into their account (login CSRF), and the
+mobile app's deep links keep working. Links that carry a bare `token_hash` would work from any
+browser, so they are refused. The cost is that an email link must be opened where it was
+requested. Redirects use `NEXT_PUBLIC_APP_URL` when it is set. The login page shows fixed words
+for known Supabase error codes and a generic message for any other. It never shows the
+`error_description` text from a link.

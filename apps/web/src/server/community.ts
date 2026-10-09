@@ -11,6 +11,7 @@ import {
   COMMENT_HIDE_AFTER_REPORTS,
   commentProblem,
   contributionPoints,
+  displayNameContentProblem,
   effectivePlan,
   normalizeDisplayName,
   parseBlockedTerms,
@@ -41,7 +42,15 @@ export async function profileOf(db: Pool, userId: string): Promise<{ displayName
   return row ? { displayName: row.display_name } : null;
 }
 
-export async function setDisplayName(db: Pool, userId: string, displayName: string) {
+export async function setDisplayName(
+  db: Pool,
+  userId: string,
+  displayName: string,
+  blockedTerms: BlockedTerms = commentBlockedTerms(),
+) {
+  // The name shows beside every comment, so it passes the same content filter.
+  const problem = displayNameContentProblem(normalizeDisplayName(displayName), blockedTerms);
+  if (problem) throw badRequest(problem);
   try {
     await db.query(
       `insert into profiles (user_id, display_name) values ($1, $2)

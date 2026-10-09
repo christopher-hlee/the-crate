@@ -1,16 +1,18 @@
 import "server-only";
 import type { Crate, CrateDetail, CrateItem } from "@app/api-client";
 import {
+  CHANNEL_SCOPE_NOT_SAVED,
   canAddCrateItems,
   canCreateCrate,
   type Filters,
   FiltersSchema,
+  hasChannelScope,
   limitsFor,
   type Plan,
   persistableFilters,
 } from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
-import { limitReached, notFound, proRequired } from "./http";
+import { badRequest, limitReached, notFound, proRequired } from "./http";
 import { catalogItems } from "./records";
 
 type CrateRow = {
@@ -100,11 +102,13 @@ export async function getCrate(db: Pool, userId: string, id: string): Promise<Cr
 }
 
 /**
- * A seeded crate's filters as stored: normalized, without a channel scope (YouTube API data,
- * kept 30 days at most). The crate the caller gets back shows what was kept.
+ * A seeded crate's filters as stored, normalized. A channel scope (YouTube API data, kept 30 days
+ * at most) is refused rather than dropped, so a seeded order never quietly covers more records.
  */
 function storedFilters(filters: Filters | null | undefined): string | null {
-  return filters ? JSON.stringify(persistableFilters(filters)) : null;
+  if (!filters) return null;
+  if (hasChannelScope(filters)) throw badRequest(CHANNEL_SCOPE_NOT_SAVED);
+  return JSON.stringify(persistableFilters(filters));
 }
 
 export async function createCrate(

@@ -1,7 +1,13 @@
 "use client";
 
 import { ApiError, type Crate } from "@app/api-client";
-import { type Filters, newSeed, PLAN_LIMITS } from "@app/core";
+import {
+  CHANNEL_SCOPE_NOT_SAVED,
+  type Filters,
+  hasChannelScope,
+  newSeed,
+  PLAN_LIMITS,
+} from "@app/core";
 import { Check, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -89,7 +95,7 @@ export function SaveToCrate({ item, seedFilters, open, onClose, onSaved }: Props
     setError(null);
     try {
       const crate = await api.createCrate(
-        seeded && seedFilters
+        seeded && seedFilters && !hasChannelScope(seedFilters)
           ? { name: name.trim(), filters: seedFilters, seed: newSeed() }
           : { name: name.trim() },
       );
@@ -148,12 +154,15 @@ export function SaveToCrate({ item, seedFilters, open, onClose, onSaved }: Props
           <Plus size={14} aria-hidden /> Create
         </Button>
       </form>
-      {seedFilters && (
-        <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
-          <input type="checkbox" checked={seeded} onChange={(e) => setSeeded(e.target.checked)} />
-          Seed the new crate with these filters, for a shareable order anyone can replay
-        </label>
-      )}
+      {seedFilters &&
+        (hasChannelScope(seedFilters) ? (
+          <p className="text-xs text-ink-2">{CHANNEL_SCOPE_NOT_SAVED}</p>
+        ) : (
+          <label className="inline-flex items-center gap-1.5 text-xs text-ink-2">
+            <input type="checkbox" checked={seeded} onChange={(e) => setSeeded(e.target.checked)} />
+            Seed the new crate with these filters, for a shareable order anyone can replay
+          </label>
+        ))}
       {error && <p className="text-warn">{error}</p>}
     </div>
   );

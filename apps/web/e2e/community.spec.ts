@@ -42,6 +42,8 @@ test("trending lists records several people favorited, free to play", async ({ p
     [info.project.name === "desktop" ? 0 : 2],
   );
   const [hot, warm] = picks;
+  // Start these records from zero fans, so a re-run on the same database counts the same.
+  await sql("delete from favorites where record_key = any($1)", [picks.map((p) => p.record_key)]);
   for (const [ref, n] of [
     [hot, 3],
     [warm, 2],

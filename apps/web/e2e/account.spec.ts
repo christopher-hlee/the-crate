@@ -4,7 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { clickSettled, signIn, sql } from "./helpers";
+import { signIn, sql } from "./helpers";
 import { stubYouTube } from "./youtube-stub";
 
 test.beforeEach(async ({ page }) => {
@@ -123,106 +123,19 @@ test("password page explains that dev sign-in has no password", async ({ page })
 });
 
 const SPOOF = "Your account is locked. Verify at crate-help.example within 24h";
-const INCOMPLETE = "That sign-in link is incomplete. Request a new one.";
-const NOT_CONFIGURED = "Sign-in isn't configured on this server.";
+const INCOMPLETE = "That sign-in link can't be used. Request a new one from this browser.";
 
-test("opening an email link signs nobody in: it lands on a page that asks for a click", async ({
-  page,
-}) => {
+test("an email link with a bare token signs nobody in", async ({ page }) => {
+  // Only PKCE codes are accepted; a token_hash link would work from anyone's browser.
   await page.goto("/auth/callback?token_hash=x&type=magiclink&next=%2Fcrates");
-  await expect(page).toHaveURL(/\/auth\/confirm\?token_hash=x&type=magiclink&next=%2Fcrates$/);
-  const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { name: "Finish signing in" })).toBeVisible();
-  // The e2e server has no Supabase: the page says so instead of offering the button.
-  await expect(main.getByText(NOT_CONFIGURED)).toBeVisible();
-  await expect(page.locator('form[action="/auth/verify"]')).toHaveCount(0);
-  await expect(main.getByRole("link", { name: "Go to sign in" })).toHaveAttribute(
-    "href",
-    "/login?next=%2Fcrates",
-  );
+  await expect(page).toHaveURL(/\/login\?error=incomplete_link&next=%2Fcrates$/);
+  await expect(page.getByRole("main").getByText(INCOMPLETE)).toBeVisible();
   expect((await page.request.get("/api/v1/me")).status()).toBe(401);
   const cookies = (await page.context().cookies()).map((c) => c.name);
   expect(cookies.filter((n) => n.startsWith("sb-") || n === "crate_dev_user")).toEqual([]);
-
-  // A link without a token, or with an unknown type, goes nowhere.
-  await page.goto("/auth/callback?token_hash=x&type=sms");
-  await expect(page).toHaveURL(/\/login\?error=incomplete_link$/);
-  await expect(main.getByText(INCOMPLETE)).toBeVisible();
-  await page.goto("/auth/confirm?type=magiclink");
-  await expect(main.getByText(INCOMPLETE)).toBeVisible();
-});
-
-test("the sign-in POST is refused from another site, without an origin, and as a GET", async ({
-  page,
-  baseURL,
-}) => {
-  // A page on another site that submits the confirmation form to us. (Plain http, like the test
-  // server: from an https page, Chromium would send `Origin: null`, which is refused too.)
-  await page.route("http://evil.example/**", (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: `<form method="post" action="${baseURL}/auth/verify">
-        <input type="hidden" name="token_hash" value="x">
-        <input type="hidden" name="type" value="magiclink">
-        <button>Continue</button>
-      </form>`,
-    }),
-  );
-  await page.goto("http://evil.example/");
-  const [res] = await Promise.all([
-    page.waitForResponse(`${baseURL}/auth/verify`),
-    page.getByRole("button", { name: "Continue" }).click(),
-  ]);
-  expect((await res.request().allHeaders()).origin).toBe("http://evil.example");
-  expect(res.status()).toBe(403);
-  await expect(page.getByText(/Refused/)).toBeVisible();
-
-  const form = { token_hash: "x", type: "magiclink" };
-  const bare = await page.request.post("/auth/verify", { form, maxRedirects: 0 });
-  expect(bare.status()).toBe(403);
-  const forged = await page.request.post("/auth/verify", {
-    form,
-    headers: { origin: "https://evil.example", referer: `${baseURL}/auth/confirm` },
-    maxRedirects: 0,
-  });
-  expect(forged.status()).toBe(403);
-  expect((await page.request.get("/auth/verify?token_hash=x&type=magiclink")).status()).toBe(405);
-  expect((await page.request.get("/api/v1/me")).status()).toBe(401);
-});
-
-test("the sign-in POST from our own page reaches the handler, which explains a missing Supabase", async ({
-  page,
-}) => {
-  await page.goto("/auth/confirm?token_hash=x&type=magiclink&next=%2Fcrates");
-  // Without Supabase the page shows no button, so add the same form to this page and submit it.
-  await page.evaluate(() => {
-    const form = document.createElement("form");
-    form.method = "post";
-    form.action = "/auth/verify";
-    for (const [name, value] of [
-      ["token_hash", "x"],
-      ["type", "magiclink"],
-      ["next", "/crates"],
-    ]) {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = name ?? "";
-      input.value = value ?? "";
-      form.append(input);
-    }
-    const button = document.createElement("button");
-    button.textContent = "Finish (test)";
-    form.append(button);
-    document.querySelector("main")?.append(form);
-  });
-  const [res] = await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith("/auth/verify")),
-    clickSettled(page.getByRole("button", { name: "Finish (test)" })),
-  ]);
-  expect(res.status()).toBe(303);
-  await expect(page).toHaveURL(/\/login\?error=not_configured&next=%2Fcrates$/);
-  await expect(page.getByRole("main").getByText(NOT_CONFIGURED)).toBeVisible();
-  expect((await page.request.get("/api/v1/me")).status()).toBe(401);
+  for (const path of ["/auth/confirm?token_hash=x&type=magiclink", "/auth/verify"]) {
+    expect((await page.request.get(path)).status(), path).toBe(404);
+  }
 });
 
 test("the sign-in page shows fixed words for errors, never text from the link", async ({

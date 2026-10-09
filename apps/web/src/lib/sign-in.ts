@@ -1,7 +1,7 @@
 // Sign-in helpers shared by the login page, the auth callback and every "Sign in" link.
 // Plain functions (no "use client"), so server route handlers can import them too.
 
-import type { EmailOtpType, Provider } from "@supabase/supabase-js";
+import type { Provider } from "@supabase/supabase-js";
 
 /** Minimum length for a new password, at sign-up and on /account/password. */
 export const MIN_PASSWORD_LENGTH = 8;
@@ -105,7 +105,7 @@ const GENERIC_AUTH_ERROR = "Sign-in didn't complete. Try again.";
 const AUTH_ERROR_COPY = {
   // The callback's own.
   not_configured: "Sign-in isn't configured on this server.",
-  incomplete_link: "That sign-in link is incomplete. Request a new one.",
+  incomplete_link: "That sign-in link can't be used. Request a new one from this browser.",
   // OAuth providers (`error`).
   access_denied: "Sign-in was cancelled or refused. Try again.",
   temporarily_unavailable: "Sign-in is busy right now. Try again in a moment.",
@@ -167,65 +167,4 @@ export function loginErrorPath(code: AuthErrorCode | "callback", next: string): 
   const safe = safeNextPath(next);
   if (safe !== "/") params.set("next", safe);
   return `/login?${params}`;
-}
-
-/** Supabase's email link types (EmailOtpType), for links that carry a token_hash. */
-const EMAIL_LINK_TYPES = [
-  "signup",
-  "invite",
-  "magiclink",
-  "recovery",
-  "email_change",
-  "email",
-] as const satisfies readonly EmailOtpType[];
-
-export type EmailLinkType = (typeof EMAIL_LINK_TYPES)[number];
-
-export function emailLinkType(raw: string | null | undefined): EmailLinkType | null {
-  return EMAIL_LINK_TYPES.find((t) => t === raw) ?? null;
-}
-
-/** An email link's token_hash, when it is there and of a sane length. */
-export function emailLinkToken(raw: string | null | undefined): string | null {
-  return raw && raw.length <= 512 ? raw : null;
-}
-
-/** Where an email link goes once verified: a safe `next`, or after a reset link, the password page. */
-export function emailLinkNext(type: EmailLinkType | null, next: string | null | undefined): string {
-  return safeNextPath(next, type === "recovery" ? "/account/password" : "/");
-}
-
-/**
- * The confirmation page for an email link that carries a token_hash. Opening the link never
- * signs anyone in: that page asks for a click, which POSTs the token to /auth/verify. A mail
- * scanner can't use the link up, and a link someone else sends can't quietly sign a visitor
- * into the sender's account.
- */
-export function emailConfirmPath(tokenHash: string, type: EmailLinkType, next: string): string {
-  const params = new URLSearchParams({ token_hash: tokenHash, type });
-  const safe = safeNextPath(next);
-  if (safe !== "/") params.set("next", safe);
-  return `/auth/confirm?${params}`;
-}
-
-function originOf(raw: string): string | null {
-  try {
-    const origin = new URL(raw).origin;
-    return origin === "null" ? null : origin;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Whether a form POST came from one of our own pages: its Origin header, or when a browser
- * leaves that out, its Referer, must be one of `origins`. A request with neither is refused.
- */
-export function isSameOriginPost(
-  headers: Pick<Headers, "get">,
-  origins: readonly string[],
-): boolean {
-  const source = headers.get("origin") ?? headers.get("referer");
-  const from = source ? originOf(source) : null;
-  return from !== null && origins.some((o) => originOf(o) === from);
 }

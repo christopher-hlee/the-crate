@@ -172,29 +172,19 @@ wrote in about it from the support inbox.
 
 ## Sign-in emails and errors (Supabase)
 
-In the Supabase dashboard, add `https://<domain>/auth/callback` to the Redirect URLs. The default
-email templates use `{{ .ConfirmationURL }}`, which comes back to `/auth/callback?code=…`. That
-PKCE code only works in the browser that asked for the email.
+In the Supabase dashboard, add `https://<domain>/auth/callback` and the mobile app's
+`thecrate://auth-callback` to the Redirect URLs. Keep the default email templates, which link
+with `{{ .ConfirmationURL }}`: Supabase checks the link and comes back with a PKCE `code`.
 
-For links that also work on another device, point the templates (Authentication → Email
-Templates) at the callback with a token hash:
+The code only works in the browser or app that asked for the email, because that is where the
+code verifier is kept. That is deliberate: a link someone else forwards can't sign a visitor into
+the sender's account (login CSRF), and the mobile app's deep links keep working. Someone who
+opens the link in another browser gets "That link can't be used. Request a new one from this
+browser." Don't switch the templates to `token_hash` links: `/auth/callback` refuses them, and
+the app can't open them.
 
-| Template | Link |
-| --- | --- |
-| Magic link | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email` |
-| Confirm signup | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup` |
-| Reset password | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` |
-| Invite user | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite` |
-| Change email | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change` |
-
-Opening such a link never signs anyone in. `/auth/callback` sends it on to `/auth/confirm`, which
-asks for a click. The button POSTs to `/auth/verify`, which verifies the token only when the
-request's `Origin` (or its `Referer`, if `Origin` is missing) is the site's own origin or
-`NEXT_PUBLIC_APP_URL`. Everything else gets a 403. This stops mail scanners from using links up,
-and stops a link someone else sends from signing a visitor into the sender's account. Behind a
-proxy that rewrites the host, set `NEXT_PUBLIC_APP_URL` to the public origin, or every click
-gets a 403. These links don't carry `next`, so people land on `/`, or on `/account/password`
-after a reset.
+Behind a proxy that rewrites the host, set `NEXT_PUBLIC_APP_URL` to the public origin. The
+callback redirects there.
 
 `/login` shows fixed words for the error codes listed in `AUTH_ERROR_COPY`
 (`apps/web/src/lib/sign-in.ts`) and a generic message for anything else. It never shows the

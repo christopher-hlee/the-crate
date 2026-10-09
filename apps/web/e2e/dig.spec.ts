@@ -387,7 +387,7 @@ test("tempo taps, note drafts and comment drafts stay with their record", async 
   await expect(tempo.getByTestId("tap-bpm")).toHaveText("3 / 4 taps");
   await clickSettled(page.getByRole("button", { name: "Note", exact: true }));
   await page.getByTestId("note-panel").getByLabel("Note").fill("Horn stab at the end");
-  const comment = page.getByTestId("comments").getByLabel("Comment");
+  const comment = page.getByTestId("comments").getByLabel("Comment", { exact: true });
   await comment.fill("About the first record");
 
   await clickSettled(page.getByTestId("shuffle"));
@@ -440,4 +440,42 @@ test("one move at a time: skip-after, the video's end and N while the next pick 
   const after = await moves(page);
   expect(after).toHaveLength(2);
   expect(after[1]?.videoId).not.toBe(before[0]?.videoId);
+});
+
+test("when skip-after can't fetch the next pick, the end of the video still moves on", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.addInitScript(() =>
+    window.localStorage.setItem("crate.player", JSON.stringify({ skipAfter: 30 })),
+  );
+  const held: Route[] = [];
+  await page.route(isShuffle, (route) => void held.push(route));
+  await page.goto("/");
+  await expect.poll(() => held.length).toBe(1);
+  await held.shift()?.continue();
+  await expect(page.getByTestId("record-panel")).toBeVisible();
+  // Let the prefetch fail too, so the next move has to ask again.
+  await expect.poll(() => held.length).toBe(1);
+  await held.shift()?.fulfill({ status: 503, body: "" });
+  const player = (s: number) =>
+    page.evaluate((state) => (window as unknown as StubWindow).__yt?.players[0]?._set(state), s);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as StubWindow).__yt?.players[0]?.state))
+    .toBe(5);
+  const before = await moves(page);
+
+  // Skip-after asks at 0:30 and the request fails: the same video keeps playing.
+  await player(1);
+  await page.clock.runFor(31_000);
+  await expect.poll(() => held.length).toBe(1);
+  await held.shift()?.fulfill({ status: 503, body: "" });
+  await page.waitForTimeout(300);
+  expect(await moves(page)).toHaveLength(before.length);
+
+  // When that video ends, autoplay-next tries again and this time gets a pick.
+  await player(0);
+  await expect.poll(() => held.length).toBe(1);
+  await held.shift()?.continue();
+  await expect.poll(async () => (await moves(page)).length).toBe(before.length + 1);
 });

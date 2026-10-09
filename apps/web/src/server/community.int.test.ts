@@ -121,6 +121,22 @@ describe("filter before posting", () => {
     expect(await stored("r:2")).toBe(1);
   });
 
+  it("applies to display names too, which show beside every comment", async () => {
+    const id = newUser();
+    const terms = parseBlockedTerms("spork");
+    await expect(setDisplayName(t.pool, id, "Spork Crew", terms)).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(setDisplayName(t.pool, id, "go to spamsite.com", terms)).rejects.toMatchObject({
+      status: 400,
+    });
+    const profile = await t.pool.query("select 1 from profiles where user_id = $1", [id]);
+    expect(profile.rowCount).toBe(0);
+    expect(await setDisplayName(t.pool, id, "Fork Crew", terms)).toEqual({
+      displayName: "Fork Crew",
+    });
+  });
+
   it("reads the list from COMMENT_BLOCKED_TERMS", async () => {
     const author = await member();
     const before = process.env.COMMENT_BLOCKED_TERMS;

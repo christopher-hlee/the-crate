@@ -5,6 +5,9 @@ import {
   COMMENT_LINK_MESSAGE,
   commentProblem,
   containsLink,
+  DISPLAY_NAME_BLOCKED_TERM_MESSAGE,
+  DISPLAY_NAME_LINK_MESSAGE,
+  displayNameContentProblem,
   hasBlockedTerm,
   moderationText,
   NO_BLOCKED_TERMS,
@@ -128,5 +131,27 @@ describe("supportContact", () => {
       placeholder: true,
     });
     expect(supportContact("not an email")).toMatchObject({ placeholder: true });
+  });
+});
+
+describe("displayNameContentProblem", () => {
+  const blocked = parseBlockedTerms("zorblat, frim fram");
+
+  it("refuses names that carry a link or a blocked term", () => {
+    expect(displayNameContentProblem("visit spamsite.com", blocked)).toBe(
+      DISPLAY_NAME_LINK_MESSAGE,
+    );
+    expect(displayNameContentProblem("Zorblat crew", blocked)).toBe(
+      DISPLAY_NAME_BLOCKED_TERM_MESSAGE,
+    );
+    expect(displayNameContentProblem("the frim fram", blocked)).toBe(
+      DISPLAY_NAME_BLOCKED_TERM_MESSAGE,
+    );
+  });
+
+  it("lets ordinary names through, and everything when no list is set", () => {
+    expect(displayNameContentProblem("D.J. Kool Herc", blocked)).toBeNull();
+    expect(displayNameContentProblem("Zorblatty", blocked)).toBeNull();
+    expect(displayNameContentProblem("Zorblat crew")).toBeNull();
   });
 });

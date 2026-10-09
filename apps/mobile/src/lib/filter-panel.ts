@@ -1,8 +1,10 @@
 // The filter panel's logic, kept free of React Native so it can be tested off-device.
 
 import {
+  CHANNEL_SCOPE_NOT_SAVED,
   type Filters,
   filterHash,
+  hasChannelScope,
   isEmptyFilter,
   normalizeFilters,
   PRO_FILTER_KEYS,
@@ -82,6 +84,7 @@ export function presetProblem(args: {
   if (isEmptyFilter(args.filters)) return "Choose some filters first.";
   if (!args.proFilters && proFiltersUsed(args.filters).length > 0)
     return "These filters use Pro tools. Remove them to save this set.";
+  if (hasChannelScope(args.filters)) return CHANNEL_SCOPE_NOT_SAVED;
   if (!name) return NAME_PROMPT;
   const replacing = args.saved.some((p) => p.name === name);
   if (!replacing && args.saved.length >= args.max)

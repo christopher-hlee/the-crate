@@ -92,6 +92,22 @@ export function commentProblem(
   return null;
 }
 
+export const DISPLAY_NAME_LINK_MESSAGE = "Display names can't contain links.";
+export const DISPLAY_NAME_BLOCKED_TERM_MESSAGE = "That name isn't allowed. Choose another.";
+
+/**
+ * Why a display name can't be used, by the same content rules as comments. The name shows
+ * beside every comment, so it would otherwise carry a blocked word or a link past the filter.
+ */
+export function displayNameContentProblem(
+  name: string,
+  blocked: BlockedTerms = NO_BLOCKED_TERMS,
+): string | null {
+  if (containsLink(name)) return DISPLAY_NAME_LINK_MESSAGE;
+  if (hasBlockedTerm(name, blocked)) return DISPLAY_NAME_BLOCKED_TERM_MESSAGE;
+  return null;
+}
+
 /** The published contact address, or a marked placeholder until the owner sets one. */
 export function supportContact(raw: string | null | undefined): {
   email: string;

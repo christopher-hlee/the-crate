@@ -195,9 +195,10 @@ export function DigScreen() {
     [me],
   );
 
+  /** Moves to the next pick. Resolves true when a new pick is on screen, false otherwise. */
   const next = useCallback(
-    async (play: boolean) => {
-      if (inFlightRef.current) return;
+    async (play: boolean): Promise<boolean> => {
+      if (inFlightRef.current) return false;
       inFlightRef.current = true;
       setBusy(true);
       try {
@@ -209,9 +210,10 @@ export function DigScreen() {
         if (pick) {
           show(pick, play);
           void prefetch();
-        } else {
-          setEmpty(true);
+          return true;
         }
+        setEmpty(true);
+        return false;
       } finally {
         inFlightRef.current = false;
         setBusy(false);
@@ -372,7 +374,12 @@ export function DigScreen() {
               const skip = settings.skipAfter;
               if (skip > 0 && heardRef.current === skip) {
                 skipFiredRef.current = true;
-                void next(true);
+                // If the dig couldn't move on (a failed request, or another move already under
+                // way that then failed), let the end of this video advance it instead.
+                void next(true).then((moved) => {
+                  if (!moved && currentRef.current?.videoId === current?.videoId)
+                    skipFiredRef.current = false;
+                });
               }
             }}
             onEnded={(videoId) => {

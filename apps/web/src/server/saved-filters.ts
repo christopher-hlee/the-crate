@@ -1,8 +1,10 @@
 import "server-only";
 import type { SavedFilter } from "@app/api-client";
 import {
+  CHANNEL_SCOPE_NOT_SAVED,
   type Filters,
   FiltersSchema,
+  hasChannelScope,
   limitsFor,
   normalizeFilters,
   type Plan,
@@ -10,7 +12,7 @@ import {
   proFiltersUsed,
 } from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
-import { limitReached, notFound, PRO_FILTERS_MESSAGE, proRequired } from "./http";
+import { badRequest, limitReached, notFound, PRO_FILTERS_MESSAGE, proRequired } from "./http";
 
 type Row = { id: string; name: string; filters: unknown; created_at: Date };
 
@@ -34,7 +36,8 @@ export async function listSavedFilters(db: Pool, userId: string, plan: Plan) {
 
 /**
  * Saves (or replaces, by name) a filter preset. Presets with Pro filters need Pro. A channel
- * scope is dropped (YouTube API data, kept 30 days at most); the result shows what was kept.
+ * scope is refused rather than dropped (YouTube API data, kept 30 days at most), so a preset
+ * never quietly means something broader than the dig it was saved from.
  */
 export async function saveFilter(
   db: Pool,
@@ -44,6 +47,7 @@ export async function saveFilter(
 ): Promise<SavedFilter> {
   if (proFiltersUsed(normalizeFilters(req.filters)).length > 0 && !limitsFor(plan).proFilters)
     throw proRequired(PRO_FILTERS_MESSAGE, true);
+  if (hasChannelScope(req.filters)) throw badRequest(CHANNEL_SCOPE_NOT_SAVED);
   const filters = persistableFilters(req.filters);
   const row = await withTransaction(db, async (client) => {
     await client.query("select pg_advisory_xact_lock(hashtextextended($1, 13))", [userId]);

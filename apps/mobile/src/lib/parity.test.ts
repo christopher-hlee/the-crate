@@ -209,6 +209,11 @@ describe("filter panel helpers", () => {
     expect(presetProblem({ ...base, name: "New", max: 1 })).toMatch(/saved 1 filter sets/);
     // Same name replaces, so the limit doesn't apply.
     expect(presetProblem({ ...base, name: "Soul", max: 1 })).toBeNull();
+    // A channel scope is YouTube data, so a set with one is never saved, even on Pro.
+    const channel = { channelIds: ["UCaaaaaaaaaaaaaaaaaaaaaa"], styles: ["Funk"] };
+    expect(presetProblem({ ...base, name: "x", filters: channel, proFilters: true })).toMatch(
+      /channel/,
+    );
   });
 
   it("matches a preset to equivalent filters", () => {

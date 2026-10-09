@@ -1,7 +1,7 @@
 // Integration: favorites, saved filters, comments and profiles, "For you" and crate item notes
 // against Postgres.
 
-import { limitsFor } from "@app/core";
+import { CHANNEL_SCOPE_NOT_SAVED, limitsFor } from "@app/core";
 import type { CopyValue } from "@app/db";
 import { copyRows } from "@app/db";
 import { createTestDatabase, type TestDatabase } from "@app/db/testing";
@@ -281,20 +281,17 @@ describe("saved filters", () => {
     });
   });
 
-  it("never stores a channel scope, which is YouTube API data", async () => {
+  it("never stores a channel scope, which is YouTube API data: it refuses, never drops it", async () => {
     const user = newUser();
     const channelIds = ["UCaaaaaaaaaaaaaaaaaaaaaa"];
-    const saved = await saveFilter(t.pool, user, "pro", {
-      name: "Channel dig",
-      filters: { channelIds, styles: ["Boogaloo"], topicOnly: true },
-    });
-    // The caller sees what was kept.
-    expect(saved.filters).toEqual({ styles: ["Boogaloo"], topicOnly: true });
-    const row = await t.pool.query<{ filters: unknown }>(
-      "select filters from saved_filters where id = $1",
-      [saved.id],
-    );
-    expect(row.rows[0]?.filters).toEqual({ styles: ["Boogaloo"], topicOnly: true });
+    await expect(
+      saveFilter(t.pool, user, "pro", {
+        name: "Channel dig",
+        filters: { channelIds, styles: ["Boogaloo"], topicOnly: true },
+      }),
+    ).rejects.toMatchObject({ status: 400, message: CHANNEL_SCOPE_NOT_SAVED });
+    const rows = await t.pool.query("select 1 from saved_filters where user_id = $1", [user]);
+    expect(rows.rowCount).toBe(0);
     // A channel scope is still a Pro filter, so Free is refused rather than silently emptied.
     await expect(
       saveFilter(t.pool, user, "free", { name: "Channel only", filters: { channelIds } }),
@@ -430,12 +427,19 @@ describe("for you", () => {
 });
 
 describe("seeded crates", () => {
-  it("store their filters without a channel scope, on create and update", async () => {
+  it("refuse a channel scope on create and update, and store other filters normalized", async () => {
     const user = newUser();
     const channelIds = ["UCaaaaaaaaaaaaaaaaaaaaaa"];
+    await expect(
+      createCrate(t.pool, user, "pro", {
+        name: "Channel seeded",
+        filters: { channelIds, styles: ["Fusion"] },
+        seed: 42,
+      }),
+    ).rejects.toMatchObject({ status: 400, message: CHANNEL_SCOPE_NOT_SAVED });
     const crate = await createCrate(t.pool, user, "pro", {
       name: "Seeded",
-      filters: { channelIds, styles: ["Fusion", "Boogaloo"] },
+      filters: { styles: ["Fusion", "Boogaloo"] },
       seed: 42,
     });
     expect(crate.filters).toEqual({ styles: ["Boogaloo", "Fusion"] });
@@ -447,8 +451,12 @@ describe("seeded crates", () => {
       ).rows[0]?.filters;
     expect(await stored()).toEqual({ styles: ["Boogaloo", "Fusion"] });
 
+    await expect(
+      updateCrate(t.pool, user, "pro", crate.id, { filters: { channelIds, yearFrom: 1970 } }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(await stored()).toEqual({ styles: ["Boogaloo", "Fusion"] });
     const updated = await updateCrate(t.pool, user, "pro", crate.id, {
-      filters: { channelIds, yearFrom: 1970 },
+      filters: { yearFrom: 1970 },
     });
     expect(updated.filters).toEqual({ yearFrom: 1970 });
     expect(await stored()).toEqual({ yearFrom: 1970 });
