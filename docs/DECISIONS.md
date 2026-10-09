@@ -444,3 +444,13 @@ report it with a timely response, and a published contact point.
   the Terms, the Privacy policy, the site footer and the mobile Account screen. Until they are
   set, `support@example.com` shows, marked as a placeholder. The Terms gain "What you post": the
   rules, removal and suspension, how to report and block, and the contact.
+
+## 49. Email links ask for a click; sign-in errors use fixed words
+
+This amends entry 45. An email link that carries a `token_hash` (from custom Supabase email
+templates) doesn't sign anyone in when it is opened. `/auth/callback` sends it to
+`/auth/confirm`, and that page's button POSTs to `/auth/verify`. Only same-origin POSTs are
+verified. This blocks login CSRF, where a link signs the visitor into someone else's account, and
+it stops mail scanners from using links up. OAuth and PKCE `code` links work as before.
+The login page shows fixed words for known Supabase error codes and a generic message for any
+other code. It never shows the `error_description` text from a link.

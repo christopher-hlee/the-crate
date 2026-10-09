@@ -1,5 +1,6 @@
 "use client";
 
+import { isAuthError } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
@@ -9,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import {
   authCallbackUrl,
+  authErrorMessage,
   authErrorText,
+  isAuthErrorCode,
   MIN_PASSWORD_LENGTH,
   OAUTH_PROVIDER_LABELS,
   type OAuthProvider,
@@ -34,7 +37,9 @@ const SUBMIT_LABEL: Record<Mode, string> = {
   reset: "Email me a reset link",
 };
 
+/** Our own words for Supabase's known error codes; otherwise its message (from its API, not a URL). */
 function messageOf(err: unknown): string {
+  if (isAuthError(err) && isAuthErrorCode(err.code)) return authErrorMessage(err.code);
   return err instanceof Error && err.message ? err.message : "Something went wrong. Try again.";
 }
 
@@ -50,10 +55,11 @@ export function LoginForm() {
   const params = useSearchParams();
   const next = safeNextPath(params.get("next"));
   const { me, loading } = useViewer();
-  // Supabase reports a failed link or provider sign-in as error_description on the redirect.
+  // A failed link or provider sign-in comes back with error codes on the redirect. Only fixed
+  // words are shown for them, never the redirect's error_description.
   const [error, setError] = useState<string | null>(() => authErrorText(params));
   useEffect(() => {
-    // Implicit-flow redirects carry it in the fragment instead.
+    // Implicit-flow redirects carry them in the fragment instead.
     const text = authErrorText(new URLSearchParams(window.location.hash.slice(1)));
     if (text) setError(text);
   }, []);
@@ -136,7 +142,7 @@ function SupabaseSignIn({
     setError(null);
     setNotice(null);
     if (!supabase) {
-      setError("Sign-in isn't configured on this server.");
+      setError(authErrorMessage("not_configured"));
       return;
     }
     if (mode === "signup") {
@@ -188,7 +194,7 @@ function SupabaseSignIn({
     setError(null);
     setNotice(null);
     if (!supabase) {
-      setError("Sign-in isn't configured on this server.");
+      setError(authErrorMessage("not_configured"));
       return;
     }
     setBusy(true);
