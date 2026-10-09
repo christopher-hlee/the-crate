@@ -6,6 +6,18 @@ export const APP_NAME = "The Crate";
 /** Placeholder reverse-DNS app ID until the name is decided. Feeds the WebView Referer. */
 export const DEFAULT_APP_ID = "com.example.cratedig";
 
+/**
+ * Shown as the contact point until the owner sets NEXT_PUBLIC_SUPPORT_EMAIL and
+ * EXPO_PUBLIC_SUPPORT_EMAIL (docs/PLAN.md). Always marked as a placeholder where it appears.
+ */
+export const SUPPORT_EMAIL_PLACEHOLDER = "support@example.com";
+
+/** A comment hides itself once this many different people with a display name report it. */
+export const COMMENT_HIDE_AFTER_REPORTS = 3;
+
+/** Commenters one account can block. */
+export const COMMENT_BLOCKS_MAX = 1000;
+
 /** Unseeded shuffle: rand_key is uniform in [0, RAND_KEY_MAX). */
 export const RAND_KEY_MAX = 2 ** 31 - 1;
 

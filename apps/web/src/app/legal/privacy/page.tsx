@@ -1,5 +1,6 @@
 import { APP_NAME } from "@app/core";
 import type { Metadata } from "next";
+import { SupportEmail } from "@/components/SupportEmail";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -40,7 +41,9 @@ export default function PrivacyPage() {
           What you post: your display name and comments, which anyone can read next to the record
           (search engines included). Each comment shows your rank, worked out from how many
           favorites, comments and tempo or key votes you have, and a Pro badge while you subscribe.
-          We also keep the comments you report; a comment several people report is hidden.
+          We also keep the comments you report; a comment several people report is hidden. The
+          commenters you block are kept so their comments stay out of your view; they aren&apos;t
+          told, and nobody else can see your list.
         </li>
         <li>
           Counts without names: Trending shows how many people favorited a record this week, never
@@ -74,6 +77,10 @@ export default function PrivacyPage() {
       <p>
         Delete your account from the Account page. Your data is removed within 7 days; most of it
         immediately.
+      </p>
+      <h2 className="text-lg font-semibold">Contact</h2>
+      <p>
+        Questions about your data or this policy: <SupportEmail />.
       </p>
     </article>
   );

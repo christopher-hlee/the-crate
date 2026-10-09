@@ -149,6 +149,14 @@ origin, and an archive build of the apps if the lane goes to mobile.
       on every list, YouTube playlist links on favorites and crates, clear history.
 - [x] Sign-in: email and password, sign-up, magic link, password reset, `next`; account display
       name and rank; header links and sign out; robots.txt and sitemaps.
+- [x] Moderation (DECISIONS 48): block commenters (web and mobile, with an Account list), a link
+      and blocked-terms filter before posting, reports only from accounts with a display name
+      and recounted from live rows, a contact point and "What you post" in the Terms.
 
 Owner sign-off before launch: the `watch_videos` link-out (DECISIONS 40), and whether "Open as
 YouTube playlist" stays Pro.
+
+Owner items before the iOS submission (DECISIONS 48): set the support email
+(`NEXT_PUBLIC_SUPPORT_EMAIL` on the web, `EXPO_PUBLIC_SUPPORT_EMAIL` in EAS; a marked placeholder
+shows until then), set `COMMENT_BLOCKED_TERMS`, and name who reviews reported comments within 24
+hours (RUNBOOK, "Moderation").

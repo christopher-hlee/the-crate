@@ -542,7 +542,11 @@ export const comments = pgTable(
     recordKey: text("record_key").notNull(),
     userId: uuid("user_id").notNull(),
     body: text("body").notNull(),
-    /** Hidden after enough reports, or by a moderator. */
+    /**
+     * Hidden once enough people report it. Both columns are worked out from the live
+     * comment_reports rows, so a reporter's account deletion can bring a comment back.
+     * Moderators remove a comment by deleting it (docs/RUNBOOK.md).
+     */
     hidden: boolean("hidden").notNull().default(false),
     reportCount: integer("report_count").notNull().default(0),
     createdAt: tstz("created_at").notNull().defaultNow(),
@@ -565,5 +569,25 @@ export const commentReports = pgTable(
   (t) => [
     primaryKey({ columns: [t.commentId, t.userId] }),
     index("comment_reports_user").on(t.userId),
+  ],
+);
+
+/**
+ * Commenters a user has blocked: their comments are hidden from the blocker. `id` is the
+ * opaque handle the blocker sees, so the blocked user's ID never leaves the server. Account
+ * deletion removes rows on either side.
+ */
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    blockerId: uuid("blocker_id").notNull(),
+    blockedId: uuid("blocked_id").notNull(),
+    id: uuid("id").notNull().defaultRandom(),
+    createdAt: tstz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.blockerId, t.blockedId] }),
+    uniqueIndex("user_blocks_id").on(t.id),
+    index("user_blocks_blocked").on(t.blockedId),
   ],
 );

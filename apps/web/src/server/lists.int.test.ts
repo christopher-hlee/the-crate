@@ -377,15 +377,22 @@ describe("profiles and comments", () => {
         )
       ).rows[0];
 
+    // Reports count only from people with a display name (community.int.test.ts).
+    const reporter = async () => {
+      const u = newUser();
+      await setDisplayName(t.pool, u, `Reporter ${u.slice(-4)}`);
+      return u;
+    };
+
     await reportComment(t.pool, author, c.id);
     expect(await count()).toEqual({ report_count: 0, hidden: false });
-    const one = newUser();
+    const one = await reporter();
     await reportComment(t.pool, one, c.id);
     await reportComment(t.pool, one, c.id);
     expect(await count()).toEqual({ report_count: 1, hidden: false });
-    await reportComment(t.pool, newUser(), c.id);
+    await reportComment(t.pool, await reporter(), c.id);
     expect((await listComments(t.pool, "r:6", null)).map((x) => x.id)).toEqual([c.id]);
-    await reportComment(t.pool, newUser(), c.id);
+    await reportComment(t.pool, await reporter(), c.id);
     expect(await count()).toEqual({ report_count: 3, hidden: true });
     expect(await listComments(t.pool, "r:6", null)).toEqual([]);
     await expect(

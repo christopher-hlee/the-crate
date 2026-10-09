@@ -11,6 +11,7 @@ export * from "./flags";
 export * from "./hash";
 export * from "./keywords";
 export * from "./matching";
+export * from "./moderation";
 export * from "./plans";
 export * from "./player";
 export * from "./quota";

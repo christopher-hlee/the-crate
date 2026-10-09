@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { AUTH_MODE, signOut } from "@/lib/supabase-browser";
 import { useViewer } from "@/lib/viewer";
+import { BlockedCommenters } from "./BlockedCommenters";
 import { DisplayNameCard } from "./DisplayNameCard";
 import { freeFeatures, limitsSummary, proFeatures } from "./plan-copy";
 
@@ -84,6 +85,7 @@ export default function AccountPage() {
       </Card>
 
       <DisplayNameCard key={me.user.id} me={me} onSaved={refresh} />
+      <BlockedCommenters key={`blocks-${me.user.id}`} />
 
       <Card className="space-y-4">
         <div>

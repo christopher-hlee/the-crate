@@ -518,6 +518,19 @@ export type Comment = z.infer<typeof CommentSchema>;
 export const CommentsResponseSchema = z.object({ comments: z.array(CommentSchema) });
 export const CreateCommentRequestSchema = z.object({ body: z.string().trim().min(1).max(1000) });
 
+/** A commenter the viewer blocked. `id` names the block, never the blocked user. */
+export const BlockedCommenterSchema = z.object({
+  id: UuidSchema,
+  displayName: z.string(),
+  blockedAt: Iso,
+});
+export type BlockedCommenter = z.infer<typeof BlockedCommenterSchema>;
+export const BlockedCommentersResponseSchema = z.object({
+  items: z.array(BlockedCommenterSchema),
+  max: z.number().int(),
+});
+export type BlockedCommentersResponse = z.infer<typeof BlockedCommentersResponseSchema>;
+
 // ---------------------------------------------------------------------------- trending
 
 /** Records the most people favorited lately. Built from favorites only, never YouTube data. */

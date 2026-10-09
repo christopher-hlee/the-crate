@@ -8,6 +8,8 @@ import {
   AssetDownloadResponseSchema,
   AssetListResponseSchema,
   AssetSchema,
+  BlockedCommenterSchema,
+  BlockedCommentersResponseSchema,
   ChangelogResponseSchema,
   ChopsSchema,
   CommentSchema,
@@ -307,6 +309,20 @@ export function createApiClient(options: ApiClientOptions) {
     },
     reportComment(id: string) {
       return request(OkResponseSchema, "POST", `/comments/${encodeURIComponent(id)}/report`);
+    },
+    /** Blocks the author of a comment: their comments stop showing to this account. */
+    blockCommenter(commentId: string) {
+      return request(
+        BlockedCommenterSchema,
+        "POST",
+        `/comments/${encodeURIComponent(commentId)}/block`,
+      );
+    },
+    blockedCommenters() {
+      return request(BlockedCommentersResponseSchema, "GET", "/me/blocks");
+    },
+    unblockCommenter(blockId: string) {
+      return request(DeletedResponseSchema, "DELETE", `/me/blocks/${encodeURIComponent(blockId)}`);
     },
     updateNote(id: string, body: z.input<typeof UpdateNoteRequestSchema>) {
       return request(OkResponseSchema, "PATCH", `/notes/${encodeURIComponent(id)}`, body);

@@ -121,3 +121,51 @@ Set `EXPO_PUBLIC_SENTRY_DSN` in the EAS environment to turn on Sentry in the app
 `@sentry/react-native/expo` plugin uploads source maps during EAS builds when `SENTRY_AUTH_TOKEN`,
 `SENTRY_ORG` and `SENTRY_PROJECT` are set; without them, set `SENTRY_DISABLE_AUTO_UPLOAD=true` so
 the build doesn't try.
+
+## Moderation
+
+Comments are public, so someone has to answer reports within 24 hours (DECISIONS 48; App Store
+guideline 1.2). The settings:
+
+- `NEXT_PUBLIC_SUPPORT_EMAIL` (web, read at build time, so redeploy after changing it) and
+  `EXPO_PUBLIC_SUPPORT_EMAIL` (EAS environment, then a new build): the published contact point.
+  Until both are set, the Terms, Privacy, footer and Account screen show a marked placeholder.
+  Watch that inbox.
+- `COMMENT_BLOCKED_TERMS` (web server): comma-separated words or phrases refused in comments,
+  matched as whole words, ignoring case and width. Keep the list in the deployment's settings,
+  never in git, and redeploy after changing it. Links are always refused.
+
+**The queue.** Check reported comments daily, hidden ones first:
+
+```sql
+select c.id, c.record_key, c.report_count, c.hidden, p.display_name, c.created_at, c.body
+  from comments c left join profiles p on p.user_id = c.user_id
+ where c.report_count > 0
+ order by c.hidden desc, c.report_count desc, c.created_at;
+```
+
+A comment hides itself once three people with a display name report it. For each one:
+
+- **Remove** a comment that breaks the rules in the Terms ("What you post"):
+  `delete from comments where id = '<id>';` (its reports go with it).
+- **Keep** a comment that was reported unfairly:
+  `delete from comment_reports where comment_id = '<id>'; update comments set report_count = 0, hidden = false where id = '<id>';`
+  The same people can report it again; if they keep at it, treat that as abuse.
+
+**Suspending an account.** Find the user from a comment
+(`select user_id from comments where id = '<id>';`), ban them in Supabase, then remove what they
+posted:
+
+```bash
+curl -X PUT "$SUPABASE_URL/auth/v1/admin/users/<uuid>" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "content-type: application/json" -d '{"ban_duration": "876000h"}'
+```
+
+```sql
+delete from comments where user_id = '<uuid>';
+```
+
+A ban stops new sign-ins and token refreshes; a session already open lasts until its access
+token expires (an hour at most). Lift a ban with `{"ban_duration": "none"}`. Reply to whoever
+wrote in about it from the support inbox.

@@ -15,3 +15,11 @@ export function timeAgo(iso: string, now: Date): string {
 }
 
 export const COMMENT_MAX = 1000;
+
+/** The list after blocking an author: all of their comments go (display names are unique). */
+export function withoutAuthor<T extends { author: { displayName: string } }>(
+  comments: readonly T[],
+  displayName: string,
+): T[] {
+  return comments.filter((c) => c.author.displayName !== displayName);
+}
