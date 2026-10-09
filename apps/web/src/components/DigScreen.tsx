@@ -13,6 +13,7 @@ import {
   normalizeFilters,
   PRO_FILTER_KEYS,
   proFiltersUsed,
+  SHUFFLE_EXCLUDE_MAX,
   stableStringify,
 } from "@app/core";
 import { Bookmark, Gauge, Heart, NotebookPen, Shuffle, SlidersHorizontal } from "lucide-react";
@@ -73,6 +74,13 @@ export function DigScreen() {
   const tokenRef = useRef(0);
   const positionRef = useRef(0);
   const nextRef = useRef<{ pick: ShufflePick; key: string } | null>(null);
+  // The pick on screen, set as soon as it is shown so callbacks never act on a stale one.
+  const currentRef = useRef<ShufflePick | null>(null);
+  // One next() at a time: N, Shuffle, the end of a video, skip-after and an unplayable skip
+  // can all ask at once, and a second answer would replace the first before it is heard.
+  const inFlightRef = useRef(false);
+  // Skip-after already moved on from the pick on screen, so its end must not move on again.
+  const skipFiredRef = useRef(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const filterKey = stableStringify(normalizeFilters(filters));
   const filtersRef = useRef(filters);
@@ -102,18 +110,30 @@ export function DigScreen() {
     if (used.length === 0) return;
     const stripped: Filters = { ...filters };
     for (const k of PRO_FILTER_KEYS) delete stripped[k];
-    setFilters(normalizeFilters(stripped));
+    const free = normalizeFilters(stripped);
+    // The first-pick effect below runs in this same commit and reads the ref before the
+    // re-render, so it has to see the stripped filters now or it asks for the Pro ones.
+    filtersRef.current = free;
+    nextRef.current = null;
+    setFilters(free);
     setNotice("This link used Pro filters, so they were left out. The rest of the dig is free.");
   }, [viewerLoading, isPro]);
 
-  const exclusions = useCallback(
-    () => ({
+  const exclusions = useCallback(() => {
+    const repeats = settingsRef.current.repeats;
+    const seen = me || repeats ? [] : seenVideos.get();
+    // The video on screen never comes straight back, signed in or not. A "more from this
+    // release" scope shuffles inside the current record, so its video ID is what keeps the
+    // server from handing the same one back.
+    const playing = currentRef.current?.videoId;
+    return {
       session: sessionRecords.get(),
-      seen: me || settingsRef.current.repeats ? [] : seenVideos.get(),
-      repeats: settingsRef.current.repeats,
-    }),
-    [me],
-  );
+      seen: playing
+        ? [...seen.filter((v) => v !== playing).slice(-(SHUFFLE_EXCLUDE_MAX - 1)), playing]
+        : seen,
+      repeats,
+    };
+  }, [me]);
 
   const fetchPick = useCallback(
     async (f: Filters): Promise<ShufflePick | null> => {
@@ -131,8 +151,10 @@ export function DigScreen() {
   const prefetch = useCallback(async () => {
     const f = filtersRef.current;
     const key = stableStringify(normalizeFilters(f));
+    const after = currentRef.current;
     const pick = await fetchPick(f);
-    if (!pick) return;
+    // Asked for while another pick was on screen: its exclusions are out of date.
+    if (!pick || currentRef.current !== after) return;
     nextRef.current = { pick, key };
     // Preload only the next pick's data and thumbnail, never a second player.
     if (pick.thumbnailUrl) {
@@ -143,6 +165,10 @@ export function DigScreen() {
 
   const show = useCallback(
     (pick: ShufflePick, play: boolean) => {
+      currentRef.current = pick;
+      skipFiredRef.current = false;
+      // A pick queued while this one was being fetched was chosen with the old exclusions.
+      nextRef.current = null;
       setCurrent(pick);
       setFavorited(pick.favorited);
       setDetail(null);
@@ -171,6 +197,8 @@ export function DigScreen() {
 
   const next = useCallback(
     async (play: boolean) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       setBusy(true);
       try {
         const key = stableStringify(normalizeFilters(filtersRef.current));
@@ -185,6 +213,7 @@ export function DigScreen() {
           setEmpty(true);
         }
       } finally {
+        inFlightRef.current = false;
         setBusy(false);
       }
     },
@@ -230,24 +259,35 @@ export function DigScreen() {
     [current],
   );
 
-  const toggleFavorite = useCallback(async () => {
-    if (!current) return;
-    if (!me) {
-      setNotice("Sign in to keep favorites: they're free.");
-      return;
-    }
-    const ref = { recordKey: current.recordKey, videoId: current.videoId };
-    const was = favorited;
-    setFavorited(!was);
-    try {
-      const r = was ? await api.removeFavorite(ref) : await api.addFavorite(ref);
-      setFavorited(r.favorited);
-      if (!was) setNotice(`Added to favorites (${r.total.toLocaleString("en-US")}).`);
-    } catch (err) {
-      setFavorited(was);
-      setNotice(err instanceof ApiError ? err.message : "Couldn't update favorites.");
-    }
-  }, [current, me, favorited]);
+  // F and the heart toggle; S on Free only ever adds, so "save" never removes a favorite.
+  const favorite = useCallback(
+    async (mode: "toggle" | "add") => {
+      const pick = current;
+      if (!pick) return;
+      if (!me) {
+        setNotice("Sign in to keep favorites: they're free.");
+        return;
+      }
+      const was = favorited;
+      if (mode === "add" && was) {
+        setNotice("Already in your favorites.");
+        return;
+      }
+      const ref = { recordKey: pick.recordKey, videoId: pick.videoId };
+      setFavorited(!was);
+      try {
+        const r = was ? await api.removeFavorite(ref) : await api.addFavorite(ref);
+        // The dig may have moved on while this was in flight; the new pick has its own heart.
+        if (currentRef.current !== pick) return;
+        setFavorited(r.favorited);
+        if (!was) setNotice(`Added to favorites (${r.total.toLocaleString("en-US")}).`);
+      } catch (err) {
+        if (currentRef.current === pick) setFavorited(was);
+        setNotice(err instanceof ApiError ? err.message : "Couldn't update favorites.");
+      }
+    },
+    [current, me, favorited],
+  );
 
   const canCrate = (limits?.maxCrates ?? 0) > 0;
 
@@ -262,11 +302,11 @@ export function DigScreen() {
         void next(true);
       } else if ((e.key === "f" || e.key === "F") && current) {
         e.preventDefault();
-        void toggleFavorite();
+        void favorite("toggle");
       } else if ((e.key === "s" || e.key === "S") && current) {
         e.preventDefault();
         if (canCrate) setSaveOpen(true);
-        else void toggleFavorite();
+        else void favorite("add");
       } else if ((e.key === "e" || e.key === "E") && current && limits?.notes) {
         e.preventDefault();
         setNoteOpen(true);
@@ -278,7 +318,7 @@ export function DigScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, current, canCrate, limits, toggleFavorite]);
+  }, [next, current, canCrate, limits, favorite]);
 
   const scope = (s: Scope) => {
     setFilters((f) =>
@@ -330,9 +370,15 @@ export function DigScreen() {
               // many seconds heard; like the end of a video, it only autoplays while visible.
               heardRef.current += 1;
               const skip = settings.skipAfter;
-              if (skip > 0 && heardRef.current === skip && !busy) void next(true);
+              if (skip > 0 && heardRef.current === skip) {
+                skipFiredRef.current = true;
+                void next(true);
+              }
             }}
-            onEnded={() => {
+            onEnded={(videoId) => {
+              // Skip-after already moved on from this pick, or the video that ended is no
+              // longer the one on screen: either way the dig has moved on once already.
+              if (skipFiredRef.current || videoId !== currentRef.current?.videoId) return;
               // The next pick only autoplays while more than half the player is visible.
               if (settings.autoAdvance) void next(true);
             }}
@@ -358,7 +404,7 @@ export function DigScreen() {
             </kbd>
           </Button>
           <Button
-            onClick={() => void toggleFavorite()}
+            onClick={() => void favorite("toggle")}
             disabled={!current}
             aria-pressed={favorited}
             data-testid="favorite"
@@ -418,6 +464,9 @@ export function DigScreen() {
         )}
         {current && (
           <TempoVotePanel
+            // A fresh panel per pick: taps, key and messages belong to the track they were for.
+            // Sibling keys must differ, so each panel prefixes its own.
+            key={`tempo:${current.recordKey}/${current.videoId}`}
             open={tempoOpen}
             onClose={() => setTempoOpen(false)}
             releaseId={current.releaseId}
@@ -427,6 +476,7 @@ export function DigScreen() {
         )}
         {current && limits?.notes && (
           <NotePanel
+            key={`note:${current.recordKey}/${current.videoId}`}
             open={noteOpen}
             onClose={() => setNoteOpen(false)}
             recordKey={current.recordKey}
@@ -463,7 +513,10 @@ export function DigScreen() {
             onStyle={addStyle}
           />
         )}
-        {current && !settings.hideComments && <CommentsPanel recordKey={current.recordKey} />}
+        {current && !settings.hideComments && (
+          // Keyed so a draft or a late list for one record never lands on the next.
+          <CommentsPanel key={current.recordKey} recordKey={current.recordKey} />
+        )}
         <AdSlot />
       </section>
     </div>

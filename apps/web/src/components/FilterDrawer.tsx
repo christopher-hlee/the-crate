@@ -687,8 +687,14 @@ function SavedFilters({
                 className="text-ink-2 hover:text-ink"
                 aria-label={`Delete ${it.name}`}
                 onClick={async () => {
-                  await api.deleteSavedFilter(it.id).catch(() => undefined);
-                  setItems((prev) => prev?.filter((x) => x.id !== it.id) ?? null);
+                  setError(null);
+                  try {
+                    await api.deleteSavedFilter(it.id);
+                    // Gone from the list only once the server has deleted it.
+                    setItems((prev) => prev?.filter((x) => x.id !== it.id) ?? null);
+                  } catch (err) {
+                    setError(err instanceof ApiError ? err.message : `Couldn't delete ${it.name}.`);
+                  }
                 }}
               >
                 <X size={14} />

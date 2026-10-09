@@ -98,6 +98,7 @@ export function TempoVotePanel({ open, onClose, releaseId, track, signedIn }: Pr
                   });
                   setMessage("Thanks. Votes that agree with others' become the track's tempo.");
                   setTaps([]);
+                  setKey("");
                 } catch (err) {
                   setMessage(err instanceof ApiError ? err.message : "Couldn't send the vote.");
                 }
