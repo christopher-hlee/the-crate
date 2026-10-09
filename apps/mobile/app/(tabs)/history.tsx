@@ -9,32 +9,12 @@ import { Button, Empty, Notice } from "../../src/components/ui";
 import { useAuth } from "../../src/lib/auth";
 import { favoriteStore } from "../../src/lib/favorites";
 import { useFavoritesVersion, useToggleFavorite } from "../../src/lib/useFavorite";
+import { useMounted } from "../../src/lib/useMounted";
 
 type Item = HistoryResponse["items"][number];
 
 export default function HistoryScreen() {
-  const { api, me } = useAuth();
-  const [items, setItems] = useState<Item[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [windowSize, setWindowSize] = useState<number | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const toggle = useToggleFavorite();
-  const favoritesVersion = useFavoritesVersion();
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!me) return;
-      api
-        .history()
-        .then((r) => {
-          setItems(r.items);
-          setCursor(r.nextCursor);
-          setWindowSize(r.window);
-        })
-        .catch(() => undefined);
-    }, [api, me]),
-  );
-
+  const { me } = useAuth();
   if (!me)
     return (
       <SafeAreaView edges={["top"]} className="flex-1 bg-bg">
@@ -44,6 +24,34 @@ export default function HistoryScreen() {
         </View>
       </SafeAreaView>
     );
+  // Tabs stay mounted, so the list is keyed by account: another user's plays never show
+  // after a switch, not even while the new list loads.
+  return <HistoryList key={me.user.id} />;
+}
+
+function HistoryList() {
+  const { api } = useAuth();
+  const mounted = useMounted();
+  const [items, setItems] = useState<Item[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [windowSize, setWindowSize] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const toggle = useToggleFavorite();
+  const favoritesVersion = useFavoritesVersion();
+
+  useFocusEffect(
+    useCallback(() => {
+      api
+        .history()
+        .then((r) => {
+          if (!mounted.current) return;
+          setItems(r.items);
+          setCursor(r.nextCursor);
+          setWindowSize(r.window);
+        })
+        .catch(() => undefined);
+    }, [api, mounted]),
+  );
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-bg">
@@ -82,6 +90,7 @@ export default function HistoryScreen() {
           api
             .history(c)
             .then((r) => {
+              if (!mounted.current) return;
               setItems((prev) => [...prev, ...r.items]);
               setCursor(r.nextCursor);
             })

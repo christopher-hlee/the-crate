@@ -5,7 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useAuth } from "../lib/auth";
 import { errorMessage, isApiError } from "../lib/errors";
-import { NAME_PROMPT, presetMatches, presetProblem } from "../lib/filter-panel";
+import {
+  NAME_PROMPT,
+  PRESET_LOCKED,
+  presetLocked,
+  presetMatches,
+  presetProblem,
+} from "../lib/filter-panel";
 import { Button } from "./ui";
 
 const byName = (a: SavedFilter, b: SavedFilter) => a.name.localeCompare(b.name);
@@ -78,38 +84,50 @@ export function useSavedFilters() {
 
 export type SavedFiltersState = ReturnType<typeof useSavedFilters>;
 
-/** Saved sets in a horizontal row: tap to apply, ✕ or press and hold to delete. */
+/**
+ * Saved sets in a horizontal row: tap to apply, ✕ or press and hold to delete. A set that uses
+ * Pro filters stays visible but locked for viewers without them (DECISIONS 36).
+ */
 export function PresetList({
   saved,
   filters,
+  proFilters,
   onApply,
 }: {
   saved: SavedFiltersState;
   filters: Filters;
+  proFilters: boolean;
   onApply: (filters: Filters) => void;
 }) {
+  const [lockedNotice, setLockedNotice] = useState(false);
   if (!saved.signedIn || saved.items.length === 0) return null;
   return (
     <View testID="saved-filters" className="mb-2">
       <Text className="mb-1 text-xs text-ink-2">Saved filters</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {saved.items.map((p) => {
-          const active = presetMatches(p.filters, filters);
+          const locked = presetLocked(p.filters, proFilters);
+          const active = !locked && presetMatches(p.filters, filters);
           return (
             <View
               key={p.id}
-              className={`mr-2 flex-row items-center rounded-full border ${active ? "border-accent bg-accent" : "border-line bg-surface-2"}`}
+              className={`mr-2 flex-row items-center rounded-full border ${active ? "border-accent bg-accent" : "border-line bg-surface-2"} ${locked ? "opacity-50" : ""}`}
             >
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Apply ${p.name}`}
+                accessibilityLabel={locked ? `${p.name}, uses Pro filters` : `Apply ${p.name}`}
                 accessibilityHint="Press and hold to delete this set"
                 accessibilityState={{ selected: active }}
-                onPress={() => onApply(p.filters)}
+                onPress={() => {
+                  setLockedNotice(locked);
+                  if (!locked) onApply(p.filters);
+                }}
                 onLongPress={() => void saved.remove(p)}
                 className="py-1.5 pl-3 pr-1"
               >
-                <Text className={active ? "text-accent-ink" : "text-ink"}>{p.name}</Text>
+                <Text className={active ? "text-accent-ink" : "text-ink"}>
+                  {locked ? `🔒 ${p.name}` : p.name}
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -124,6 +142,16 @@ export function PresetList({
           );
         })}
       </ScrollView>
+      {lockedNotice && !proFilters ? (
+        <Pressable
+          testID="saved-filter-locked"
+          accessibilityRole="link"
+          onPress={() => router.push("/account")}
+          className="mt-1"
+        >
+          <Text className="text-xs text-accent underline">{PRESET_LOCKED} Go Pro to use it.</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

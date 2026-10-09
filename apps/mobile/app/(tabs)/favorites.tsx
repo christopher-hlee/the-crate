@@ -1,7 +1,7 @@
 // Favorites: free for anyone signed in. One player for the list (ItemListPlayer), paged by
 // cursor, with inline notes, a heart to remove, and "Open in YouTube" for plans that have it.
 
-import type { FavoriteItem } from "@app/api-client";
+import type { FavoriteItem, MeResponse } from "@app/api-client";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -15,32 +15,10 @@ import { useAuth } from "../../src/lib/auth";
 import { errorMessage } from "../../src/lib/errors";
 import { favoriteStore, itemKey } from "../../src/lib/favorites";
 import { useToggleFavorite } from "../../src/lib/useFavorite";
+import { useMounted } from "../../src/lib/useMounted";
 
 export default function FavoritesScreen() {
-  const { api, me } = useAuth();
-  const toggle = useToggleFavorite();
-  const [items, setItems] = useState<FavoriteItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [total, setTotal] = useState<number | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
-  const signedIn = Boolean(me);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!signedIn) return;
-      api
-        .favorites()
-        .then((r) => {
-          setItems(r.items);
-          setCursor(r.nextCursor);
-          setTotal(r.total);
-          favoriteStore.setMany(r.items, true);
-        })
-        .catch((err) => setNotice(errorMessage(err, "Couldn't load your favorites.")));
-    }, [api, signedIn]),
-  );
-
+  const { me } = useAuth();
   if (!me)
     return (
       <SafeAreaView edges={["top"]} className="flex-1 bg-bg">
@@ -50,7 +28,40 @@ export default function FavoritesScreen() {
         </View>
       </SafeAreaView>
     );
+  // Tabs stay mounted, so the list is keyed by account: another user's favorites, notes and
+  // cursor never show after a switch, not even while the new list loads.
+  return <FavoritesList key={me.user.id} me={me} />;
+}
 
+function FavoritesList({ me }: { me: MeResponse }) {
+  const { api } = useAuth();
+  const mounted = useMounted();
+  const toggle = useToggleFavorite();
+  const [items, setItems] = useState<FavoriteItem[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      api
+        .favorites()
+        .then((r) => {
+          // Dropped once the account has changed, so the store never learns another's list.
+          if (!mounted.current) return;
+          setItems(r.items);
+          setCursor(r.nextCursor);
+          setTotal(r.total);
+          favoriteStore.setMany(r.items, true);
+        })
+        .catch((err) => {
+          if (mounted.current) setNotice(errorMessage(err, "Couldn't load your favorites."));
+        });
+    }, [api, mounted]),
+  );
+
+  // The cursor is opaque: it goes back to the server as it came.
   const loadMore = () => {
     if (!cursor) return;
     const c = cursor;
@@ -58,6 +69,7 @@ export default function FavoritesScreen() {
     api
       .favorites(c)
       .then((r) => {
+        if (!mounted.current) return;
         setItems((prev) => {
           const have = new Set(prev.map(itemKey));
           return [...prev, ...r.items.filter((i) => !have.has(itemKey(i)))];

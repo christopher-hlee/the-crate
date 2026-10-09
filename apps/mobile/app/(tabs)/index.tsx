@@ -27,8 +27,9 @@ import { Button, Notice } from "../../src/components/ui";
 import { useAuth } from "../../src/lib/auth";
 import { config } from "../../src/lib/config";
 import { errorMessage } from "../../src/lib/errors";
-import { seenVideos, sessionRecords } from "../../src/lib/exclusions";
-import { favoriteStore } from "../../src/lib/favorites";
+import { seenVideos, sessionRecords, shuffleExclusions } from "../../src/lib/exclusions";
+import { favoritedFor, favoriteStore } from "../../src/lib/favorites";
+import { PRO_FILTERS_LEFT_OUT, withoutProFilters } from "../../src/lib/filter-panel";
 import { isNextSwipe } from "../../src/lib/gestures";
 import { useOnline } from "../../src/lib/online";
 import { scopeLabel, withoutScopes } from "../../src/lib/scopes";
@@ -36,6 +37,9 @@ import { useIsFavorite, useToggleFavorite } from "../../src/lib/useFavorite";
 import { type PlayerHandle, PlayerWebView } from "../../src/player/PlayerWebView";
 
 type Panel = "filters" | "save" | "note" | null;
+
+/** A pick and the viewer it was fetched for (null when signed out). */
+type Fetched = { pick: ShufflePick; userId: string | null };
 
 export default function DigScreen() {
   const { api, me, loading } = useAuth();
@@ -45,66 +49,93 @@ export default function DigScreen() {
   const [filters, setFilters] = useState<Filters>({});
   const [census, setCensus] = useState<StylesResponse | null>(null);
   const [matches, setMatches] = useState<string | null>(null);
-  const [current, setCurrent] = useState<ShufflePick | null>(null);
+  const [shown, setShown] = useState<Fetched | null>(null);
+  const current = shown?.pick ?? null;
   const [detail, setDetail] = useState<RecordDetail | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [empty, setEmpty] = useState(false);
   const [busy, setBusy] = useState(false);
-  const nextRef = useRef<{ pick: ShufflePick; key: string } | null>(null);
+  const nextRef = useRef<(Fetched & { key: string }) | null>(null);
   const lastCrate = useRef<{ id: string; name: string } | null>(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
   const currentRef = useRef(current);
   currentRef.current = current;
+  const userId = me?.user.id ?? null;
+  const userRef = useRef(userId);
+  userRef.current = userId;
+  const proFilters = Boolean(me?.limits.proFilters);
   const filterKey = stableStringify(normalizeFilters(filters));
   const toggleFavorite = useToggleFavorite();
-  const favorited = useIsFavorite(current, current?.favorited ?? false);
+  // The server's `favorited` answers for whoever fetched the pick; after a switch of account
+  // it's unknown until the store learns it.
+  const pickFavorited = shown ? favoritedFor(shown.pick, shown.userId, userId) : false;
+  const favorited = useIsFavorite(current, pickFavorited);
   // Plans without crates (Free) favorite on a long-press instead of saving to a crate.
   const hasCrates = me ? me.limits.maxCrates !== 0 : false;
 
   const fetchPick = useCallback(
-    async (f: Filters): Promise<ShufflePick | null> => {
+    async (f: Filters): Promise<Fetched | null> => {
+      const viewer = userRef.current;
       try {
-        const res = await api.shuffle(f, {
-          session: sessionRecords.get(),
-          seen: me ? [] : seenVideos.get(),
-        });
-        return res.pick;
+        const res = await api.shuffle(
+          f,
+          shuffleExclusions({
+            session: sessionRecords,
+            seen: seenVideos,
+            signedIn: viewer !== null,
+            current: currentRef.current?.videoId ?? null,
+          }),
+        );
+        return res.pick ? { pick: res.pick, userId: viewer } : null;
       } catch (err) {
         setNotice(err instanceof ApiError ? err.message : "Couldn't reach the crate. Try again.");
         return null;
       }
     },
-    [api, me],
+    [api],
   );
 
   const prefetch = useCallback(async () => {
     const f = filtersRef.current;
-    const pick = await fetchPick(f);
-    if (!pick) return;
-    nextRef.current = { pick, key: stableStringify(normalizeFilters(f)) };
+    const fetched = await fetchPick(f);
+    if (!fetched) return;
+    nextRef.current = { ...fetched, key: stableStringify(normalizeFilters(f)) };
     // Preload only the next pick's data and thumbnail, never a second player.
-    if (pick.thumbnailUrl) void Image.prefetch(pick.thumbnailUrl).catch(() => false);
+    const thumb = fetched.pick.thumbnailUrl;
+    if (thumb) void Image.prefetch(thumb).catch(() => false);
   }, [fetchPick]);
 
   const show = useCallback(
-    (pick: ShufflePick, play: boolean) => {
-      setCurrent(pick);
+    (fetched: Fetched, play: boolean) => {
+      const { pick } = fetched;
+      // Set now, not on the next render: the prefetch that follows excludes this video, and
+      // a late record detail is checked against it.
+      currentRef.current = pick;
+      setShown(fetched);
       setDetail(null);
       setEmpty(false);
       setPanel((p) => (p === "filters" ? p : null));
       sessionRecords.add(pick.recordKey);
-      if (me) favoriteStore.set(pick, pick.favorited);
-      else seenVideos.add(pick.videoId);
+      const viewer = userRef.current;
+      if (viewer === null) seenVideos.add(pick.videoId);
+      else if (fetched.userId === viewer) favoriteStore.set(pick, pick.favorited);
       // Playback only follows a tap or swipe; the first pick on arrival is cued.
       player.current?.load(pick.videoId, { autoplay: play });
+      // An answer for an earlier pick that arrives late is dropped.
+      const key = pick.recordKey;
+      const stillShown = () => currentRef.current?.recordKey === key;
       api
-        .record(pick.recordKey)
-        .then(setDetail)
-        .catch(() => setDetail(null));
+        .record(key)
+        .then((d) => {
+          if (stillShown()) setDetail(d);
+        })
+        .catch(() => {
+          if (stillShown()) setDetail(null);
+        });
     },
-    [api, me],
+    [api],
   );
 
   const next = useCallback(
@@ -115,10 +146,13 @@ export default function DigScreen() {
         const key = stableStringify(normalizeFilters(filtersRef.current));
         const queued = nextRef.current;
         nextRef.current = null;
-        const pick =
-          queued && queued.key === key ? queued.pick : await fetchPick(filtersRef.current);
-        if (pick) {
-          show(pick, play);
+        // A pick queued for other filters or another account is never shown.
+        const fetched =
+          queued && queued.key === key && queued.userId === userRef.current
+            ? queued
+            : await fetchPick(filtersRef.current);
+        if (fetched) {
+          show(fetched, play);
           void prefetch();
         } else setEmpty(true);
       } finally {
@@ -147,6 +181,25 @@ export default function DigScreen() {
     if (pick) player.current?.load(pick.videoId, { autoplay: false });
   }, [online]);
 
+  // A pick prefetched for one account never shows under another.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the viewer changes
+  useEffect(() => {
+    nextRef.current = null;
+  }, [userId]);
+
+  // Without Pro (signed out, a lapsed plan, another account) Pro filters are left out rather
+  // than failing every shuffle; the free filters stay. Same as the web's Dig.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: filterKey stands in for filters
+  useEffect(() => {
+    if (loading || proFilters) return;
+    const stripped = withoutProFilters(filtersRef.current);
+    if (!stripped) return;
+    filtersRef.current = stripped;
+    nextRef.current = null;
+    setFilters(stripped);
+    setNotice(PRO_FILTERS_LEFT_OUT);
+  }, [loading, proFilters, filterKey]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: filterKey stands in for filters
   useEffect(() => {
     nextRef.current = null;
@@ -168,7 +221,7 @@ export default function DigScreen() {
         setPanel("save");
         return;
       }
-      const isFavorite = favoriteStore.get(current) ?? current.favorited;
+      const isFavorite = favoriteStore.get(current) ?? pickFavorited;
       if (mode === "add" && isFavorite) {
         setNotice("Already in your favorites.");
         return;
@@ -180,7 +233,7 @@ export default function DigScreen() {
       }
       if (mode === "add") setNotice("Added to favorites.");
     },
-    [current, me, toggleFavorite],
+    [current, me, pickFavorited, toggleFavorite],
   );
 
   const quickSave = useCallback(async () => {
@@ -356,7 +409,7 @@ export default function DigScreen() {
             census={census}
             filters={filters}
             onChange={setFilters}
-            proFilters={Boolean(me?.limits.proFilters)}
+            proFilters={proFilters}
             matches={matches}
           />
         ) : null}
@@ -387,7 +440,7 @@ export default function DigScreen() {
           <RecordDetails
             pick={current}
             detail={detail}
-            proFilters={Boolean(me?.limits.proFilters)}
+            proFilters={proFilters}
             onScope={(s) => applyScope(s.filters)}
           />
         ) : null}

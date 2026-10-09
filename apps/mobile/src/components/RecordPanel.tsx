@@ -2,7 +2,7 @@ import type { RecordDetail, ShufflePick } from "@app/api-client";
 import { formatDuration, youtubeWatchUrl } from "@app/core";
 import { router } from "expo-router";
 import { Linking, Pressable, Text, View } from "react-native";
-import { moreFromScopes, type Scope } from "../lib/scopes";
+import { detailFor, moreFromScopes, type Scope } from "../lib/scopes";
 import { Chip } from "./ui";
 
 function Link({ label, url, muted }: { label: string; url: string; muted?: boolean }) {
@@ -33,7 +33,7 @@ function Tag({ label, accent }: { label: string; accent?: boolean }) {
  */
 export function RecordDetails({
   pick,
-  detail,
+  detail: anyDetail,
   proFilters,
   onScope,
 }: {
@@ -42,6 +42,8 @@ export function RecordDetails({
   proFilters: boolean;
   onScope: (scope: Scope) => void;
 }) {
+  // A late answer for an earlier pick never shows under this one.
+  const detail = detailFor(pick, anyDetail);
   const r = pick.record;
   const playing = pick.track?.position;
   return (
