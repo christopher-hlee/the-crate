@@ -30,6 +30,7 @@ export const GET = route(async (req) => {
         maxFavorites: l.maxFavorites,
         maxSavedFilters: l.maxSavedFilters,
         notes: l.notes,
+        maxNotes: l.maxNotes,
         crateExport: l.crateExport,
         createShared: l.createShared,
         proFilters: l.proFilters,

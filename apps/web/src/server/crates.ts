@@ -7,6 +7,7 @@ import {
   FiltersSchema,
   limitsFor,
   type Plan,
+  persistableFilters,
 } from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
 import { limitReached, notFound, proRequired } from "./http";
@@ -98,6 +99,14 @@ export async function getCrate(db: Pool, userId: string, id: string): Promise<Cr
   return { crate: toCrate(crate), items: await crateItems(db, id) };
 }
 
+/**
+ * A seeded crate's filters as stored: normalized, without a channel scope (YouTube API data,
+ * kept 30 days at most). The crate the caller gets back shows what was kept.
+ */
+function storedFilters(filters: Filters | null | undefined): string | null {
+  return filters ? JSON.stringify(persistableFilters(filters)) : null;
+}
+
 export async function createCrate(
   db: Pool,
   userId: string,
@@ -121,7 +130,7 @@ export async function createCrate(
     const res = await client.query<CrateRow>(
       `insert into crates as c (user_id, name, filters, seed) values ($1, $2, $3, $4)
        returning ${CRATE_COLUMNS}`,
-      [userId, req.name, req.filters ? JSON.stringify(req.filters) : null, req.seed ?? null],
+      [userId, req.name, storedFilters(req.filters), req.seed ?? null],
     );
     return toCrate(res.rows[0] as CrateRow);
   });
@@ -148,7 +157,7 @@ export async function updateCrate(
     sets.push(`name = $${values.length}`);
   }
   if (req.filters !== undefined) {
-    values.push(req.filters ? JSON.stringify(req.filters) : null);
+    values.push(storedFilters(req.filters));
     sets.push(`filters = $${values.length}`);
   }
   if (req.seed !== undefined) {

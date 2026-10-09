@@ -14,6 +14,8 @@ export type PlanLimits = {
   maxSavedFilters: number;
   /** Notes on records, favorites and crate items. */
   notes: boolean;
+  /** Timestamped notes kept per user. */
+  maxNotes: number;
   crateExport: boolean;
   /** Create share links, seeded crates and the like. Everyone can play them. */
   createShared: boolean;
@@ -38,6 +40,7 @@ export const PLAN_LIMITS: Readonly<Record<Plan, PlanLimits>> = {
     maxFavorites: 10_000,
     maxSavedFilters: 200,
     notes: true,
+    maxNotes: 10_000,
     crateExport: false,
     createShared: false,
     proFilters: false,
@@ -54,6 +57,7 @@ export const PLAN_LIMITS: Readonly<Record<Plan, PlanLimits>> = {
     maxFavorites: 10_000,
     maxSavedFilters: 200,
     notes: true,
+    maxNotes: 10_000,
     crateExport: true,
     createShared: true,
     proFilters: true,

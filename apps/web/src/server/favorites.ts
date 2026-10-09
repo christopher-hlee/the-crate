@@ -1,8 +1,9 @@
 import "server-only";
-import type { FavoritesResponse } from "@app/api-client";
+import { type FavoritesResponse, RecordKeySchema, VideoIdSchema } from "@app/api-client";
 import { limitsFor, type Plan } from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
-import { limitReached, notFound } from "./http";
+import { z } from "zod";
+import { badRequest, limitReached, notFound } from "./http";
 import { catalogItems } from "./records";
 
 const PAGE = 50;
@@ -16,25 +17,77 @@ async function total(db: Pool, userId: string): Promise<number> {
   return res.rows[0]?.n ?? 0;
 }
 
-/** Newest first, 50 a page. The cursor is the offset (favorites are capped at 10,000). */
+/**
+ * Where a page ends in the newest-first order: the last row's added_at (to the microsecond,
+ * so rows saved in the same millisecond aren't lost), record key and video ID. Clients get it
+ * as an opaque base64url string. A keyset, unlike an offset, doesn't skip rows when favorites
+ * are removed between pages.
+ */
+const CursorSchema = z.tuple([
+  z.string().regex(/^2\d{3}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/),
+  RecordKeySchema,
+  VideoIdSchema,
+]);
+type Cursor = z.infer<typeof CursorSchema>;
+
+export function encodeFavoritesCursor(cursor: Cursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+function parseCursor(raw: string): Cursor | null {
+  if (!/^[A-Za-z0-9_-]{1,400}$/.test(raw)) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  const parsed = CursorSchema.safeParse(value);
+  if (!parsed.success) return null;
+  // A real calendar instant only: Postgres would throw on "2026-02-30".
+  const [at] = parsed.data;
+  const ms = Date.parse(at);
+  const real = !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 19) === at.slice(0, 19);
+  return real ? parsed.data : null;
+}
+
+/** The position a cursor names, or a 400 for anything this server didn't hand out. */
+export function decodeFavoritesCursor(raw: string): Cursor {
+  const cursor = parseCursor(raw);
+  if (!cursor) throw badRequest("Invalid cursor");
+  return cursor;
+}
+
+/** Newest first, 50 a page, from a keyset cursor (see `encodeFavoritesCursor`). */
 export async function listFavorites(
   db: Pool,
   userId: string,
   plan: Plan,
   cursor: string | null,
 ): Promise<FavoritesResponse> {
-  const offset = Math.max(0, Number.parseInt(cursor ?? "0", 10) || 0);
+  const after = cursor ? decodeFavoritesCursor(cursor) : null;
+  const values: unknown[] = [userId];
+  let keyset = "";
+  if (after) {
+    values.push(...after);
+    keyset = `and (added_at < $2::timestamptz
+             or (added_at = $2::timestamptz and (record_key, video_id) > ($3, $4)))`;
+  }
   const res = await db.query<{
     record_key: string;
     video_id: string;
     note: string | null;
     added_at: Date;
+    added_key: string;
   }>(
-    `select record_key, video_id, note, added_at from favorites where user_id = $1
-      order by added_at desc, record_key, video_id limit ${PAGE + 1} offset $2`,
-    [userId, offset],
+    `select record_key, video_id, note, added_at,
+            to_char(added_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as added_key
+       from favorites where user_id = $1 ${keyset}
+      order by added_at desc, record_key, video_id limit ${PAGE + 1}`,
+    values,
   );
   const rows = res.rows.slice(0, PAGE);
+  const last = rows.at(-1);
   const items = await catalogItems(
     db,
     rows.map((r) => ({ recordKey: r.record_key, videoId: r.video_id })),
@@ -52,7 +105,10 @@ export async function listFavorites(
         addedAt: r.added_at.toISOString(),
       };
     }),
-    nextCursor: res.rows.length > PAGE ? String(offset + PAGE) : null,
+    nextCursor:
+      res.rows.length > PAGE && last
+        ? encodeFavoritesCursor([last.added_key, last.record_key, last.video_id])
+        : null,
     total: await total(db, userId),
     max: limitsFor(plan).maxFavorites,
   };

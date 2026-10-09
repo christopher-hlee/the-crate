@@ -30,6 +30,7 @@ describe("plan limits", () => {
       maxFavorites: 10_000,
       maxSavedFilters: 200,
       notes: true,
+      maxNotes: 10_000,
       tempoVotes: true,
       comments: true,
     });
@@ -47,6 +48,9 @@ describe("plan limits", () => {
     const pro = limitsFor("pro");
     expect(pro).toMatchObject({
       historyWindow: 1000,
+      maxFavorites: 10_000,
+      maxSavedFilters: 200,
+      maxNotes: 10_000,
       proFilters: true,
       youtubePlaylist: true,
       crateExport: true,

@@ -140,16 +140,23 @@ export async function pickNext(db: Queryable, o: PickOptions): Promise<ShuffleRe
   const random = o.random ?? Math.random;
   // With repeats on, only this session's records are skipped, not everything heard before.
   const repeats = o.exclusions.repeats === true;
-  const seenIds = repeats ? [] : o.exclusions.seen;
+  // "More from this release" scopes the shuffle to records this session has already shown
+  // (the one on screen, at least), so those can't also be skipped as session records.
+  const scoped = new Set(o.filters.recordKeys ?? []);
+  const sessionKeys = o.exclusions.session.filter((k) => !scoped.has(k));
+  // `seen` is the client's own list of videos to skip, honoured for everyone: a signed-out
+  // user's seen list, or the video on screen. Clients leave their seen list out with repeats
+  // on; signed-in users' history is skipped here unless repeats are on.
+  const seenIds = o.exclusions.seen;
   const ex: Exclusions = {
-    sessionRecordKeys: o.exclusions.session,
-    clientSeenIds: o.userId ? [] : seenIds,
+    sessionRecordKeys: sessionKeys,
+    clientSeenIds: seenIds,
     userId: repeats ? null : o.userId,
     viewerCountry: o.viewerCountry,
   };
 
   if (await isNarrow(db, o.filters, o.threshold)) {
-    const session = new Set(o.exclusions.session);
+    const session = new Set(sessionKeys);
     const seen = new Set(seenIds);
     let candidates = (await candidateList(db, o.filters, o.threshold, o.viewerCountry)).filter(
       ([rk, vid]) => !session.has(rk) && !seen.has(vid),

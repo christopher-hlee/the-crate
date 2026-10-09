@@ -142,6 +142,17 @@ export function normalizeFilters(input: Filters): Filters {
   return f;
 }
 
+/**
+ * The normalized filters as a saved preset or a seeded crate stores them. Channel IDs come
+ * from the YouTube API, which we keep for at most 30 days (rule 7, DECISIONS 39), so a
+ * "More from this channel" scope only lives in the URL and the dig, never in a stored row.
+ */
+export function persistableFilters(input: Filters): Filters {
+  const f = normalizeFilters(input);
+  delete f.channelIds;
+  return f;
+}
+
 /** Stable cache key for a filter set. */
 export function filterHash(filters: Filters): string {
   return hashHex(stableStringify(normalizeFilters(filters)));

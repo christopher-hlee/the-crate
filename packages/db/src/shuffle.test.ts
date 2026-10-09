@@ -38,6 +38,19 @@ describe("filterClauses", () => {
     expect(p.values).toEqual(expect.arrayContaining([60, 62.5, 120, 125, 240, 250]));
   });
 
+  it("passes keywords only as a sanitized tsquery parameter", () => {
+    const p = new Params();
+    const sql = filterClauses({ q: "post-punk'); drop table history; --" }, p).join(" ");
+    expect(sql).not.toContain("drop");
+    expect(sql).not.toContain("punk");
+    expect(p.values).toEqual(["post:* & punk:* & drop:* & table:* & history:*"]);
+    const count = buildCountQuery({ q: "post-punk", styles: ["Dub"] }, { cap: 10 });
+    // Set queries read the union of each source's matches, so both GIN indexes can serve it.
+    expect(count.text).toContain("union all");
+    expect(count.text.match(/to_tsquery\('simple', \$1::text\)/g)).toHaveLength(3);
+    expect(count.values).toEqual(["post:* & punk:*", ["Dub"], 11]);
+  });
+
   it("uses the single key without compatible keys", () => {
     const p = new Params();
     filterClauses({ key: "8A" }, p);

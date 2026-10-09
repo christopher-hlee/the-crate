@@ -6,6 +6,7 @@ import {
   limitsFor,
   normalizeFilters,
   type Plan,
+  persistableFilters,
   proFiltersUsed,
 } from "@app/core";
 import { type Pool, withTransaction } from "@app/db";
@@ -31,16 +32,19 @@ export async function listSavedFilters(db: Pool, userId: string, plan: Plan) {
   };
 }
 
-/** Saves (or replaces, by name) a filter preset. Presets with Pro filters need Pro. */
+/**
+ * Saves (or replaces, by name) a filter preset. Presets with Pro filters need Pro. A channel
+ * scope is dropped (YouTube API data, kept 30 days at most); the result shows what was kept.
+ */
 export async function saveFilter(
   db: Pool,
   userId: string,
   plan: Plan,
   req: { name: string; filters: Filters },
 ): Promise<SavedFilter> {
-  const filters = normalizeFilters(req.filters);
-  if (proFiltersUsed(filters).length > 0 && !limitsFor(plan).proFilters)
+  if (proFiltersUsed(normalizeFilters(req.filters)).length > 0 && !limitsFor(plan).proFilters)
     throw proRequired(PRO_FILTERS_MESSAGE, true);
+  const filters = persistableFilters(req.filters);
   const row = await withTransaction(db, async (client) => {
     await client.query("select pg_advisory_xact_lock(hashtextextended($1, 13))", [userId]);
     const existing = await client.query(

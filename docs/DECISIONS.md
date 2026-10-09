@@ -277,8 +277,8 @@ Supersedes the tier table in the spec's "Product scope" and the Free crate limit
 follows the leading crate-digging app's published tiers, with three tools moved down to Free
 so the cheaper plan is also the more generous one:
 
-- **Free (signed in):** 10,000 favorites, 200 saved filter sets, timestamped notes, tempo,
-  key and max-views filters, tap tempo and tempo/key votes, comments, a 50-play history.
+- **Free (signed in):** 10,000 favorites, 200 saved filter sets, 10,000 timestamped notes,
+  tempo, key and max-views filters, tap tempo and tempo/key votes, comments, a 50-play history.
 - **Pro:** crates (200 of up to 1,000 records), keyword search, topic channels, "more from"
   this release, channel, label or artist, deep-cut and format-note filters, a 1,000-play
   history, crate sheets (CSV/JSON), share links and seeded crates, YouTube playlist links
@@ -294,8 +294,10 @@ create crates or add to them; notes are kept. The numbers live in `packages/core
 `favorites` holds keys only (user, record key, video ID, note, added at), capped at 10,000,
 with no foreign keys into catalog tables. The heart or F toggles a favorite; S opens the crate
 picker on Pro and favorites on Free. Favorites feed "For you" and Trending (41) and count
-toward rank (37). Saved filter sets are stored as the same normalized filter object the URL
-uses, so a preset that includes Pro filters stays visible but locked on Free.
+toward rank (37). The list pages newest first with an opaque keyset cursor (added at, record
+key, video ID), so removing favorites while scrolling never skips any. Saved filter sets are
+stored as the same normalized filter object the URL uses, minus any channel scope (39), so a
+preset that includes Pro filters stays visible but locked on Free.
 
 ## 37. Comments, display names and ranks
 
@@ -312,18 +314,27 @@ Account deletion removes comments, reports and the profile.
 
 Pro keyword search matches each word as a prefix, and every word must match within one source:
 the Discogs side (record, artist, label, track and style names) or the YouTube side (video title
-and tags). Two IMMUTABLE functions (`record_search_doc`, `video_search_doc`) back GIN expression
-indexes. The query is built from sanitized terms in `packages/core/src/keywords.ts` and only ever
-reaches SQL as a parameter. "Topic channels only" means YouTube's auto-generated
-"<Artist> - Topic" uploads. "More from" scopes the shuffle to one record key, channel ID,
-Discogs label ID or artist ID.
+and tags). Words split at punctuation the way Postgres splits the indexed names, so "Post-Punk"
+searches "post" and "punk" and "R&B" searches "r" and "b"; combining marks stay inside their
+word, so Devanagari and Thai words match whole. Two IMMUTABLE functions (`record_search_doc`,
+`video_search_doc`) back GIN expression indexes. Counts, candidate lists and seeded orders read
+the union of each source's matches so both indexes serve them; the rand_key seek, which only
+runs on broad filter sets, tests each row instead. The query is built from sanitized terms in
+`packages/core/src/keywords.ts` and only ever reaches SQL as a parameter. "Topic channels only"
+means YouTube's auto-generated "<Artist> - Topic" uploads. "More from" scopes the shuffle to one
+record key, channel ID, Discogs label ID or artist ID. Inside a record scope the session's
+no-repeat list doesn't apply to the scoped record (it is always the one on screen); the client
+keeps the video on screen out by sending its ID in `seen`, which the server honours for every
+viewer and with repeats on.
 
 ## 39. YouTube channel and tags are stored as API data under rule 7
 
 The worker's existing `videos.list` call already returns `snippet.channelId`, `channelTitle` and
 `tags`, so adding them costs no quota. They live in `yt_videos` with the other API data, are
 refreshed with it and nulled by the purge within 30 days, and are used only as filters (topic
-channels, more from this channel, keywords). They never feed a score, a rank or Trending.
+channels, more from this channel, keywords). They never feed a score, a rank or Trending. A
+channel scope lives only in the URL and the current dig: saved filter sets and seeded crates
+are stored without it, so no channel ID outlives the purge in a user table.
 
 ## 40. YouTube playlists: a link out, Play all, and no API export yet
 

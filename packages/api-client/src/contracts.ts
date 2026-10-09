@@ -354,6 +354,7 @@ export const MeResponseSchema = z.object({
     maxFavorites: z.number().int(),
     maxSavedFilters: z.number().int(),
     notes: z.boolean(),
+    maxNotes: z.number().int(),
     crateExport: z.boolean(),
     createShared: z.boolean(),
     proFilters: z.boolean(),

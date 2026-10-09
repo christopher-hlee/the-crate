@@ -1,6 +1,7 @@
 // Integration: favorites, saved filters, comments and profiles, "For you" and crate item notes
 // against Postgres.
 
+import { limitsFor } from "@app/core";
 import type { CopyValue } from "@app/db";
 import { copyRows } from "@app/db";
 import { createTestDatabase, type TestDatabase } from "@app/db/testing";
@@ -13,7 +14,7 @@ import {
   reportComment,
   setDisplayName,
 } from "./community";
-import { addItem, createCrate, getCrate, setCrateItemNote } from "./crates";
+import { addItem, createCrate, getCrate, setCrateItemNote, updateCrate } from "./crates";
 import {
   addFavorite,
   favoriteStatus,
@@ -22,6 +23,7 @@ import {
   setFavoriteNote,
 } from "./favorites";
 import { forYou } from "./for-you";
+import { addNote, listNotes } from "./notes";
 import { deleteSavedFilter, listSavedFilters, saveFilter } from "./saved-filters";
 
 let t: TestDatabase;
@@ -119,7 +121,7 @@ describe("favorites", () => {
     expect((await listFavorites(t.pool, newUser(), "free", null)).items).toEqual([]);
   });
 
-  it("pages 50 at a time with an offset cursor", async () => {
+  it("pages 50 at a time with an opaque keyset cursor", async () => {
     const user = newUser();
     await t.pool.query(
       `insert into favorites (user_id, record_key, video_id, added_at)
@@ -130,11 +132,93 @@ describe("favorites", () => {
     const one = await listFavorites(t.pool, user, "pro", null);
     expect(one.items).toHaveLength(50);
     expect(one.items[0]?.recordKey).toBe("r:41");
-    expect(one.nextCursor).toBe("50");
+    expect(one.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    // Not a number, so a client that still adjusts numeric cursors leaves it alone.
+    expect(Number.parseInt(one.nextCursor ?? "", 10)).toBeNaN();
     expect(one.total).toBe(55);
     const two = await listFavorites(t.pool, user, "pro", one.nextCursor);
     expect(two.items.map((i) => i.recordKey)).toEqual(["r:91", "r:92", "r:93", "r:94", "r:95"]);
     expect(two.nextCursor).toBeNull();
+  });
+
+  async function walk(user: string, between?: (page: number) => Promise<void>) {
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 10; page++) {
+      const res = await listFavorites(t.pool, user, "free", cursor);
+      seen.push(...res.items.map((i) => `${i.recordKey}/${i.videoId}`));
+      cursor = res.nextCursor;
+      if (!cursor) break;
+      await between?.(page);
+    }
+    return seen;
+  }
+
+  it("doesn't skip rows when favorites are removed or added between pages", async () => {
+    const user = newUser();
+    await t.pool.query(
+      `insert into favorites (user_id, record_key, video_id, added_at)
+       select $1, 'r:' || n, 'vid' || lpad(n::text, 8, '0'), now() - (n || ' seconds')::interval
+         from generate_series(1, 120) as n`,
+      [user],
+    );
+    const all = (await walk(user)).slice();
+    expect(all).toHaveLength(120);
+    const got = await walk(user, async (page) => {
+      if (page !== 0) return;
+      // The user hearts off three rows on page one and favorites a new record.
+      for (const i of [3, 10, 49]) await removeFavorite(t.pool, user, ref(i));
+      await addFavorite(t.pool, user, "free", ref(999));
+    });
+    // Every row that was there throughout comes exactly once: rows 51 to 53 aren't skipped.
+    expect(got.slice(50)).toEqual(all.slice(50));
+    expect(new Set(got).size).toBe(got.length);
+  });
+
+  it("keeps rows with the same timestamp, even to the microsecond, in key order", async () => {
+    const user = newUser();
+    // One statement: every row gets the same now().
+    await t.pool.query(
+      `insert into favorites (user_id, record_key, video_id)
+       select $1, 'r:' || n, 'vid' || lpad(n::text, 8, '0') from generate_series(1, 60) as n`,
+      [user],
+    );
+    // And rows a microsecond apart, which a millisecond cursor would merge.
+    await t.pool.query(
+      `insert into favorites (user_id, record_key, video_id, added_at)
+       select $1, 'r:' || n, 'vid' || lpad(n::text, 8, '0'),
+              '2026-10-01T12:00:00.000500Z'::timestamptz - (n - 60 || ' microseconds')::interval
+         from generate_series(61, 120) as n`,
+      [user],
+    );
+    const got = await walk(user);
+    expect(got).toHaveLength(120);
+    expect(new Set(got).size).toBe(120);
+    const sameNow = got.slice(0, 60).map((k) => k.split("/")[0]);
+    expect(sameNow).toEqual([...sameNow].sort());
+  });
+
+  it("refuses cursors it didn't hand out", async () => {
+    const user = newUser();
+    const enc = (v: unknown) => Buffer.from(JSON.stringify(v)).toString("base64url");
+    for (const bad of [
+      "50",
+      "not a cursor",
+      enc(["2026-10-01T12:00:00.000000Z", "r:1"]),
+      enc(["2026-10-01T12:00:00Z", "r:1", vid(1)]),
+      enc(["2026-02-30T12:00:00.000000Z", "r:1", vid(1)]),
+      enc(["0000-01-01T00:00:00.000000Z", "r:1", vid(1)]),
+      enc(["2026-10-01T12:00:00.000000Z", "x:1", vid(1)]),
+      enc(["2026-10-01T12:00:00.000000Z", "r:1", "short"]),
+      enc({ at: "2026-10-01T12:00:00.000000Z" }),
+    ]) {
+      await expect(listFavorites(t.pool, user, "free", bad)).rejects.toMatchObject({
+        status: 400,
+        code: "bad_request",
+      });
+    }
+    const ok = enc(["2026-10-01T12:00:00.000000Z", "r:1", vid(1)]);
+    expect((await listFavorites(t.pool, user, "free", ok)).items).toEqual([]);
   });
 
   it("stops at the plan's cap", async () => {
@@ -195,6 +279,26 @@ describe("saved filters", () => {
     await expect(deleteSavedFilter(t.pool, user, first.id)).rejects.toMatchObject({
       code: "not_found",
     });
+  });
+
+  it("never stores a channel scope, which is YouTube API data", async () => {
+    const user = newUser();
+    const channelIds = ["UCaaaaaaaaaaaaaaaaaaaaaa"];
+    const saved = await saveFilter(t.pool, user, "pro", {
+      name: "Channel dig",
+      filters: { channelIds, styles: ["Boogaloo"], topicOnly: true },
+    });
+    // The caller sees what was kept.
+    expect(saved.filters).toEqual({ styles: ["Boogaloo"], topicOnly: true });
+    const row = await t.pool.query<{ filters: unknown }>(
+      "select filters from saved_filters where id = $1",
+      [saved.id],
+    );
+    expect(row.rows[0]?.filters).toEqual({ styles: ["Boogaloo"], topicOnly: true });
+    // A channel scope is still a Pro filter, so Free is refused rather than silently emptied.
+    await expect(
+      saveFilter(t.pool, user, "free", { name: "Channel only", filters: { channelIds } }),
+    ).rejects.toMatchObject({ code: "pro_required" });
   });
 
   it("caps new presets but still replaces one by name at the cap", async () => {
@@ -315,6 +419,92 @@ describe("for you", () => {
     const b = await forYou(t.pool, user, 0, now);
     expect(b.items.map((i) => i.videoId)).toEqual(a.items.map((i) => i.videoId));
     expect(b.seed).toBe(a.seed);
+  });
+});
+
+describe("seeded crates", () => {
+  it("store their filters without a channel scope, on create and update", async () => {
+    const user = newUser();
+    const channelIds = ["UCaaaaaaaaaaaaaaaaaaaaaa"];
+    const crate = await createCrate(t.pool, user, "pro", {
+      name: "Seeded",
+      filters: { channelIds, styles: ["Fusion", "Boogaloo"] },
+      seed: 42,
+    });
+    expect(crate.filters).toEqual({ styles: ["Boogaloo", "Fusion"] });
+    const stored = async () =>
+      (
+        await t.pool.query<{ filters: unknown }>("select filters from crates where id = $1", [
+          crate.id,
+        ])
+      ).rows[0]?.filters;
+    expect(await stored()).toEqual({ styles: ["Boogaloo", "Fusion"] });
+
+    const updated = await updateCrate(t.pool, user, "pro", crate.id, {
+      filters: { channelIds, yearFrom: 1970 },
+    });
+    expect(updated.filters).toEqual({ yearFrom: 1970 });
+    expect(await stored()).toEqual({ yearFrom: 1970 });
+    expect(
+      (await updateCrate(t.pool, user, "pro", crate.id, { filters: null })).filters,
+    ).toBeNull();
+  });
+});
+
+describe("notes", () => {
+  const note = (i: number, body = `Note ${i}`) => ({ ...ref(i), atSeconds: i, body });
+
+  it("adds and lists a user's notes on a video", async () => {
+    const user = newUser();
+    const a = await addNote(t.pool, user, "free", note(1, "Break at 1:20"));
+    expect(a).toMatchObject({
+      recordKey: "r:1",
+      videoId: vid(1),
+      atSeconds: 1,
+      body: "Break at 1:20",
+    });
+    expect((await listNotes(t.pool, user, vid(1))).map((n) => n.id)).toEqual([a.id]);
+    expect(await listNotes(t.pool, newUser(), vid(1))).toEqual([]);
+  });
+
+  it("stops at the plan's cap", async () => {
+    const user = newUser();
+    const max = limitsFor("free").maxNotes;
+    expect(max).toBe(10_000);
+    await t.pool.query(
+      `insert into notes (user_id, record_key, video_id, body)
+       select $1, 'r:1', $2, 'n' || n from generate_series(1, $3::int) as n`,
+      [user, vid(1), max],
+    );
+    await expect(addNote(t.pool, user, "free", note(2))).rejects.toMatchObject({
+      status: 403,
+      code: "limit_reached",
+    });
+    await t.pool.query(
+      "delete from notes where id = (select id from notes where user_id = $1 limit 1)",
+      [user],
+    );
+    expect((await addNote(t.pool, user, "pro", note(2))).body).toBe("Note 2");
+    // Two at once can't both slip past the cap.
+    const race = await Promise.allSettled([
+      addNote(t.pool, user, "free", note(3)),
+      addNote(t.pool, user, "free", note(4)),
+    ]);
+    expect(race.every((r) => r.status === "rejected")).toBe(true);
+    await t.pool.query(
+      "delete from notes where id = (select id from notes where user_id = $1 limit 1)",
+      [user],
+    );
+    const settled = await Promise.allSettled([
+      addNote(t.pool, user, "free", note(3)),
+      addNote(t.pool, user, "free", note(4)),
+    ]);
+    expect(settled.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const n = await t.pool.query<{ n: number }>(
+      "select count(*)::int as n from notes where user_id = $1",
+      [user],
+    );
+    expect(n.rows[0]?.n).toBe(max);
   });
 });
 

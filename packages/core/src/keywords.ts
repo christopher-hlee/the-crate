@@ -1,17 +1,22 @@
 // Keyword filter → a Postgres tsquery string. Every word becomes a prefix match, so "break"
-// finds "breaks" and "breakbeat". Words are reduced to letters and digits; anything else is
-// dropped, so user text can never inject tsquery operators.
+// finds "breaks" and "breakbeat". Text is folded to NFKC, lowercased and split into runs of
+// letters, combining marks and digits, the way Postgres' parser splits the indexed names:
+// "Post-Punk" is indexed as "post" and "punk" (and "post-punk"), so it is searched as
+// "post:* & punk:*". Marks stay inside their word, so Devanagari or Thai words survive whole.
+// Everything else is a separator, so user text can never inject tsquery operators.
 
 const MAX_TERMS = 8;
+/** A word needs a letter or digit; a stray combining mark on its own isn't one. */
+const HAS_BASE = /[\p{L}\p{N}]/u;
 
 export function keywordTsQuery(q: string | null | undefined): string | null {
   if (!q) return null;
-  const terms = q
+  const words = q
+    .normalize("NFKC")
     .toLowerCase()
-    .split(/\s+/)
-    .map((w) => w.normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, ""))
-    .filter((w) => w.length > 0)
-    .slice(0, MAX_TERMS);
+    .split(/[^\p{L}\p{M}\p{N}]+/u)
+    .filter((w) => HAS_BASE.test(w));
+  const terms = [...new Set(words)].slice(0, MAX_TERMS);
   if (terms.length === 0) return null;
-  return [...new Set(terms)].map((t) => `${t}:*`).join(" & ");
+  return terms.map((t) => `${t}:*`).join(" & ");
 }

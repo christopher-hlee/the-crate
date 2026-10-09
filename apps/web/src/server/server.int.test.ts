@@ -14,6 +14,7 @@ import { TRENDING, trending } from "./trending";
 
 let t: TestDatabase;
 const USER = "44444444-4444-4444-4444-444444444444";
+const MASTER = ["masterv0001", "masterv0002", "masterv0003"];
 
 const COLUMNS = [
   "record_key",
@@ -56,6 +57,14 @@ beforeAll(async () => {
   const rows: CopyValue[][] = [];
   for (let i = 1; i <= 200; i++) rows.push(row(i, i <= 5 ? ["Rare Groove"] : ["Fusion"]));
   rows.push(row(999, ["Rare Groove"], false));
+  // A master with three videos, for "More from this release".
+  MASTER.forEach((video, i) => {
+    const r = row(500, ["Dub"]);
+    r[0] = "m:500";
+    r[1] = video;
+    r[10] = 500_000 + i * 1000;
+    rows.push(r);
+  });
   const client = await t.pool.connect();
   try {
     await copyRows(client, "record_videos", COLUMNS, rows);
@@ -143,6 +152,72 @@ describe("pickNext", () => {
     });
     expect(broad.via).toBe("seek");
     expect(broad.pick).not.toBeNull();
+  });
+});
+
+describe("pickNext within one record (More from this release)", () => {
+  const SCOPE = { recordKeys: ["m:500"] };
+  // A threshold of 50 serves the scope from a cached list; 0 forces the rand_key seek.
+  const PATHS = [
+    ["list", 50],
+    ["seek", 0],
+  ] as const;
+
+  async function picks(
+    n: number,
+    exclusions: { session: string[]; seen: string[]; repeats?: boolean },
+    threshold: number,
+    userId: string | null = null,
+  ) {
+    const out: (string | null)[] = [];
+    for (let i = 0; i < n; i++) {
+      const res = await pickNext(t.pool, {
+        filters: SCOPE,
+        exclusions,
+        userId,
+        viewerCountry: null,
+        threshold,
+      });
+      if (res.pick) expect(res.via).toBe(threshold > 0 ? "list" : "seek");
+      out.push(res.pick ? `${res.pick.recordKey}/${res.pick.videoId}` : null);
+    }
+    return out;
+  }
+
+  for (const [via, threshold] of PATHS) {
+    it(`shuffles inside the record even though the session has shown it (${via})`, async () => {
+      // The Dig screen adds every pick to the session list before the scope is applied.
+      const got = await picks(30, { session: ["r:1", "m:500"], seen: [] }, threshold);
+      expect(got.every((p) => p?.startsWith("m:500/"))).toBe(true);
+      // The list picks uniformly; the seek wraps to the lowest rand_key in a set this small.
+      if (via === "list") expect(new Set(got).size).toBeGreaterThan(1);
+    });
+
+    it(`keeps the video on screen out by its ID, signed in or not (${via})`, async () => {
+      // masterv0001 has the lowest rand_key, so the seek would land on it every time.
+      for (const userId of [null, "99999999-9999-4999-8999-999999999999"]) {
+        const ex = { session: ["m:500"], seen: ["masterv0001"] };
+        const got = await picks(20, ex, threshold, userId);
+        expect(got.every((p) => p?.startsWith("m:500/"))).toBe(true);
+        expect(got).not.toContain("m:500/masterv0001");
+        // Repeats lift the server-side history, not the client's own list.
+        const again = await picks(20, { ...ex, repeats: true }, threshold, userId);
+        expect(again.every((p) => p?.startsWith("m:500/"))).toBe(true);
+        expect(again).not.toContain("m:500/masterv0001");
+      }
+      expect(await picks(1, { session: ["m:500"], seen: MASTER }, threshold, USER)).toEqual([null]);
+    });
+  }
+
+  it("still skips the session's records outside a scope", async () => {
+    const res = await pickNext(t.pool, {
+      filters: { styles: ["Rare Groove"] },
+      exclusions: { session: ["r:1", "r:2", "r:3", "r:4", "r:5"], seen: [] },
+      userId: null,
+      viewerCountry: null,
+      threshold: 50,
+    });
+    expect(res.pick).toBeNull();
   });
 });
 

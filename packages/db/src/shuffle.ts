@@ -12,9 +12,8 @@ import {
 } from "@app/core";
 import { Params, type Query } from "./sql";
 
-/** WHERE clauses for a filter set, against `record_videos` aliased as `rv`. */
-export function filterClauses(input: Filters, p: Params): string[] {
-  const f = normalizeFilters(input);
+/** WHERE clauses for everything but keywords, against `record_videos` aliased as `rv`. */
+function plainClauses(f: Filters, p: Params): string[] {
   const out: string[] = [];
   if (f.genres) out.push(`rv.genres && ${p.add(f.genres, "text[]")}`);
   if (f.styles) out.push(`rv.styles && ${p.add(f.styles, "text[]")}`);
@@ -41,17 +40,6 @@ export function filterClauses(input: Filters, p: Params): string[] {
   if (f.labelIds) out.push(`rv.label_id = any(${p.add(f.labelIds, "bigint[]")})`);
   if (f.artistIds) out.push(`rv.artist_ids && ${p.add(f.artistIds, "bigint[]")}`);
   if (f.recordKeys) out.push(`rv.record_key = any(${p.add(f.recordKeys, "text[]")})`);
-  const ts = keywordTsQuery(f.q);
-  if (ts) {
-    // Discogs names (catalog) or the video's own title and tags (YouTube data, kept 30 days).
-    // The expressions match the GIN indexes in migration 0003 exactly.
-    const q = p.add(ts, "text");
-    out.push(
-      `(record_search_doc(rv.title, rv.artist_display, rv.label_name, rv.track_title, rv.styles, rv.genres) @@ to_tsquery('simple', ${q})
-    or exists (select 1 from yt_videos yk where yk.video_id = rv.video_id and yk.title is not null
-                 and video_search_doc(yk.title, yk.tags) @@ to_tsquery('simple', ${q})))`,
-    );
-  }
   if (f.topicOnly) {
     out.push(
       `exists (select 1 from yt_videos yt where yt.video_id = rv.video_id and yt.channel_title like '% - Topic')`,
@@ -71,6 +59,62 @@ export function filterClauses(input: Filters, p: Params): string[] {
   return out;
 }
 
+// Keywords match the Discogs names (catalog) or the video's own title and tags (YouTube data,
+// kept 30 days), and every word must match within one of the two (DECISIONS 38). The document
+// expressions match the GIN expression indexes in migration 0003 exactly. `tsq` is the
+// placeholder of the sanitized tsquery parameter, never user text.
+const recordDoc = (a: string, tsq: string) =>
+  `record_search_doc(${a}.title, ${a}.artist_display, ${a}.label_name, ${a}.track_title, ${a}.styles, ${a}.genres) @@ to_tsquery('simple', ${tsq})`;
+const videoDoc = (a: string, tsq: string) =>
+  `video_search_doc(${a}.title, ${a}.tags) @@ to_tsquery('simple', ${tsq})`;
+
+/**
+ * Keywords as a per-row test, for the seek. The seek only runs on broad filter sets (narrow
+ * ones are served from a candidate list), so walking `rand_key` meets a match within a few
+ * rows. The video side is a primary-key probe per row, not a hash of every matching video,
+ * which a common word in titles or tags would make large.
+ */
+function keywordRowClause(tsq: string): string {
+  return `(${recordDoc("rv", tsq)}
+    or coalesce((select ${videoDoc("yk", tsq)} from yt_videos yk
+                  where yk.video_id = rv.video_id and yk.title is not null), false))`;
+}
+
+/**
+ * Keywords as the rows a set query reads (counts, candidate lists, seeded orders): the rows
+ * whose Discogs names match, then the rows whose video matches and whose names don't, so
+ * nothing comes twice. Each arm can be served by its GIN index, and a capped count stops once
+ * it has enough rows. (An OR with a correlated EXISTS can use neither index, so a rare word
+ * computed the document of every row in the catalog.)
+ */
+function keywordSource(tsq: string): string {
+  return `(
+  select r.* from record_videos r where ${recordDoc("r", tsq)}
+  union all
+  select r.* from record_videos r
+   where exists (select 1 from yt_videos yk where yk.video_id = r.video_id and yk.title is not null
+                   and ${videoDoc("yk", tsq)})
+     and (${recordDoc("r", tsq)}) is not true
+) rv`;
+}
+
+/** WHERE clauses for a filter set, against `record_videos` aliased as `rv`. */
+export function filterClauses(input: Filters, p: Params): string[] {
+  const f = normalizeFilters(input);
+  const out = plainClauses(f, p);
+  const ts = keywordTsQuery(f.q);
+  if (ts) out.push(keywordRowClause(p.add(ts, "text")));
+  return out;
+}
+
+/** The FROM item (aliased `rv`) and WHERE clauses for a query over a whole filtered set. */
+function filteredSet(input: Filters, p: Params): { from: string; clauses: string[] } {
+  const f = normalizeFilters(input);
+  const ts = keywordTsQuery(f.q);
+  const from = ts ? keywordSource(p.add(ts, "text")) : "record_videos rv";
+  return { from, clauses: ["rv.playable", ...plainClauses(f, p)] };
+}
+
 /** Excludes videos blocked in the viewer's country. Skipped when the country is unknown. */
 export function regionClause(country: string | null | undefined, p: Params): string | null {
   if (!country || !/^[A-Z]{2}$/.test(country)) return null;
@@ -81,7 +125,7 @@ export function regionClause(country: string | null | undefined, p: Params): str
 export type Exclusions = {
   /** Records already played this session: no repeat records. */
   sessionRecordKeys?: readonly string[];
-  /** Signed-out users' seen list, kept on the client. */
+  /** Video IDs the client asks to skip: a signed-out user's seen list, or the one on screen. */
   clientSeenIds?: readonly string[];
   /** Signed-in users: anything in their history is skipped. */
   userId?: string | null;
@@ -135,7 +179,8 @@ export type PickRow = {
 
 /**
  * The unseeded pick: one indexed seek on rand_key inside the filtered set. `r` is uniform
- * in [0, 2^31); when nothing comes back, run again with r = 0 to wrap around.
+ * in [0, 2^31); when nothing comes back, run again with r = 0 to wrap around. Meant for broad
+ * filter sets; narrow ones pick from `buildCandidateListQuery` instead.
  */
 export function buildPickQuery(filters: Filters, ctx: Exclusions & { r: number }): Query {
   const p = new Params();
@@ -165,12 +210,12 @@ export function buildCountQuery(
   options: { cap?: number; viewerCountry?: string | null } = {},
 ): Query {
   const p = new Params();
-  const clauses = ["rv.playable", ...filterClauses(filters, p)];
+  const { from, clauses } = filteredSet(filters, p);
   const region = regionClause(options.viewerCountry, p);
   if (region) clauses.push(region);
   const cap = options.cap ?? MATCH_COUNT_CAP;
   return {
-    text: `select count(*)::int as n, count(bpm)::int as with_tempo from (\n  select rv.bpm from record_videos rv\n  where ${where(clauses)}\n  limit ${p.add(cap + 1, "int")}\n) s`,
+    text: `select count(*)::int as n, count(bpm)::int as with_tempo from (\n  select rv.bpm from ${from}\n  where ${where(clauses)}\n  limit ${p.add(cap + 1, "int")}\n) s`,
     values: p.values,
   };
 }
@@ -181,11 +226,11 @@ export function buildCandidateListQuery(
   options: { limit: number; viewerCountry?: string | null },
 ): Query {
   const p = new Params();
-  const clauses = ["rv.playable", ...filterClauses(filters, p)];
+  const { from, clauses } = filteredSet(filters, p);
   const region = regionClause(options.viewerCountry, p);
   if (region) clauses.push(region);
   return {
-    text: `select rv.record_key, rv.video_id from record_videos rv\nwhere ${where(clauses)}\nlimit ${p.add(options.limit, "int")}`,
+    text: `select rv.record_key, rv.video_id from ${from}\nwhere ${where(clauses)}\nlimit ${p.add(options.limit, "int")}`,
     values: p.values,
   };
 }
@@ -199,12 +244,12 @@ export function buildSeededQuery(
   options: { seed: number; limit?: number; offset?: number },
 ): Query {
   const p = new Params();
-  const clauses = ["rv.playable", ...filterClauses(filters, p)];
+  const { from, clauses } = filteredSet(filters, p);
   const seed = p.add(options.seed, "bigint");
   const limit = p.add(options.limit ?? SEEDED_PAGE_SIZE, "int");
   const offset = p.add(options.offset ?? 0, "int");
   return {
-    text: `select rv.record_key, rv.video_id from record_videos rv\nwhere ${where(clauses)}\norder by hashtextextended(rv.record_key || ':' || rv.video_id, ${seed}), rv.record_key, rv.video_id\nlimit ${limit} offset ${offset}`,
+    text: `select rv.record_key, rv.video_id from ${from}\nwhere ${where(clauses)}\norder by hashtextextended(rv.record_key || ':' || rv.video_id, ${seed}), rv.record_key, rv.video_id\nlimit ${limit} offset ${offset}`,
     values: p.values,
   };
 }
