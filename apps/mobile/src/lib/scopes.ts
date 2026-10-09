@@ -23,7 +23,13 @@ function named(list: readonly { id: number | null; name: string }[] | undefined)
   return out.slice(0, MAX_PER_KIND);
 }
 
-export function moreFromScopes(pick: ShufflePick, detail: RecordDetail | null): Scope[] {
+/** `detail` when it belongs to `pick`'s record, else null (a late answer for an earlier pick). */
+export function detailFor(pick: ShufflePick, detail: RecordDetail | null): RecordDetail | null {
+  return detail && detail.recordKey === pick.recordKey ? detail : null;
+}
+
+export function moreFromScopes(pick: ShufflePick, anyDetail: RecordDetail | null): Scope[] {
+  const detail = detailFor(pick, anyDetail);
   const out: Scope[] = [
     {
       id: "release",

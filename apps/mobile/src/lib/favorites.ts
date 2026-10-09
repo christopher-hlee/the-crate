@@ -57,3 +57,16 @@ export function createFavoriteStore(): FavoriteStore {
 }
 
 export const favoriteStore = createFavoriteStore();
+
+/**
+ * A pick's `favorited` flag, trusted only when the pick was fetched for the viewer now signed
+ * in (`fetchedFor` and `viewer` are user IDs, null when signed out). Otherwise it's unknown and
+ * shown as not favorited, so one account's favorites never show under another.
+ */
+export function favoritedFor(
+  pick: { favorited: boolean },
+  fetchedFor: string | null,
+  viewer: string | null,
+): boolean {
+  return fetchedFor !== null && fetchedFor === viewer && pick.favorited;
+}

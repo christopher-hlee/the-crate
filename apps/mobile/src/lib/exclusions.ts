@@ -26,3 +26,22 @@ export function cappedList(max = SHUFFLE_EXCLUDE_MAX): CappedList {
 
 export const sessionRecords = cappedList();
 export const seenVideos = cappedList();
+
+/**
+ * What a shuffle leaves out: the record keys shown this session and, while signed out, the
+ * videos already seen. A signed-in viewer's seen videos are their server history, which only
+ * counts plays past 5 seconds, so the video on screen (`current`) is sent too: a "More from
+ * this release" scope keeps that release in play and must not hand back the same video.
+ */
+export function shuffleExclusions(args: {
+  session: CappedList;
+  seen: CappedList;
+  signedIn: boolean;
+  current: string | null;
+}): { session: string[]; seen: string[] } {
+  const { session, seen, signedIn, current } = args;
+  return {
+    session: session.get(),
+    seen: signedIn ? (current ? [current] : []) : seen.get(),
+  };
+}

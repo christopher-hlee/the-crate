@@ -76,7 +76,7 @@ export function FilterPanel({ census, filters, onChange, proFilters, matches }: 
         <Text className="text-xs font-semibold uppercase tracking-wider text-ink-2">Filters</Text>
         {matches ? <Text className="text-xs text-ink-2">{matches} records</Text> : null}
       </View>
-      <PresetList saved={saved} filters={filters} onApply={onChange} />
+      <PresetList saved={saved} filters={filters} proFilters={proFilters} onApply={onChange} />
       <TextInput
         testID="style-search"
         value={query}

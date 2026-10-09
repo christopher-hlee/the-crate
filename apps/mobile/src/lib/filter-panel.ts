@@ -1,6 +1,13 @@
 // The filter panel's logic, kept free of React Native so it can be tested off-device.
 
-import { type Filters, filterHash, isEmptyFilter, proFiltersUsed } from "@app/core";
+import {
+  type Filters,
+  filterHash,
+  isEmptyFilter,
+  normalizeFilters,
+  PRO_FILTER_KEYS,
+  proFiltersUsed,
+} from "@app/core";
 
 export const BPM_MIN = 20;
 export const BPM_MAX = 400;
@@ -85,4 +92,22 @@ export function presetProblem(args: {
 /** True when a preset holds the same search as the current filters. */
 export function presetMatches(preset: Filters, current: Filters): boolean {
   return !isEmptyFilter(current) && filterHash(preset) === filterHash(current);
+}
+
+/** A saved set that uses Pro filters stays visible but locked for viewers without them. */
+export function presetLocked(preset: Filters, proFilters: boolean): boolean {
+  return !proFilters && proFiltersUsed(preset).length > 0;
+}
+
+export const PRESET_LOCKED = "That set uses Pro filters.";
+
+export const PRO_FILTERS_LEFT_OUT =
+  "Your filters used Pro tools, so those were left out. The rest of the dig is free.";
+
+/** The filters without any Pro filter, or null when they use none (nothing to leave out). */
+export function withoutProFilters(filters: Filters): Filters | null {
+  if (proFiltersUsed(filters).length === 0) return null;
+  const stripped: Filters = { ...filters };
+  for (const k of PRO_FILTER_KEYS) delete stripped[k];
+  return normalizeFilters(stripped);
 }

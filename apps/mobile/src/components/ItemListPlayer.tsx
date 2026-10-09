@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Linking, Pressable, Text, View } from "react-native";
 import { useAuth } from "../lib/auth";
 import { config } from "../lib/config";
 import { type PlayerHandle, PlayerWebView } from "../player/PlayerWebView";
@@ -132,6 +132,18 @@ export function ItemListPlayer<T extends CatalogItem>({
                         [r?.track?.title, r?.year, r?.label].filter(Boolean).join(" · ")}
                     </Text>
                   </View>
+                </Pressable>
+                {/* Every record links to its discogs.com page, playable or not (rule 17). */}
+                <Pressable
+                  testID={`discogs-${index}`}
+                  accessibilityRole="link"
+                  accessibilityLabel="View on Discogs"
+                  accessibilityHint="Opens the record's page on discogs.com"
+                  onPress={() => void Linking.openURL(item.discogsUrl).catch(() => undefined)}
+                  hitSlop={6}
+                  className="ml-2 px-2 py-2"
+                >
+                  <Text className="text-xs text-ink-2 underline">Discogs ↗</Text>
                 </Pressable>
                 {actions?.(item, index)}
               </View>
