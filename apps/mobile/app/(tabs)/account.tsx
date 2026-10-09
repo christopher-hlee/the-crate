@@ -1,8 +1,9 @@
+import type { BlockedCommenter } from "@app/api-client";
 import { APP_NAME, PLAN_LIMITS } from "@app/core";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { DisplayNameForm } from "../../src/components/DisplayNameForm";
@@ -10,7 +11,9 @@ import { Button, Notice, Section } from "../../src/components/ui";
 import { archiveEnabled } from "../../src/lib/archive";
 import { useAuth } from "../../src/lib/auth";
 import { config } from "../../src/lib/config";
+import { errorMessage } from "../../src/lib/errors";
 import { buy, configurePurchases, proPackages, restore } from "../../src/lib/purchases";
+import { SUPPORT } from "../../src/lib/support";
 
 const SOURCE: Record<string, string> = {
   stripe: "the web",
@@ -83,6 +86,80 @@ function ProfileSection({ onSaved }: { onSaved: (message: string) => void }) {
           }}
           onCancel={name ? () => setEditing(false) : undefined}
         />
+      )}
+    </Section>
+  );
+}
+
+/** Commenters this account blocked, reloaded whenever the screen comes into view. */
+function BlockedSection() {
+  const { api, me } = useAuth();
+  const userId = me?.user.id ?? null;
+  const [items, setItems] = useState<BlockedCommenter[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (!userId) return;
+    let live = true;
+    setLoadFailed(false);
+    api
+      .blockedCommenters()
+      .then((r) => live && setItems(r.items))
+      .catch(() => live && setLoadFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [api, userId]);
+  useFocusEffect(load);
+
+  const unblock = async (b: BlockedCommenter) => {
+    setError(null);
+    setPending(b.id);
+    try {
+      await api.unblockCommenter(b.id);
+      setItems((prev) => (prev ?? []).filter((x) => x.id !== b.id));
+    } catch (err) {
+      setError(errorMessage(err, `Couldn't unblock ${b.displayName}. Try again.`));
+    } finally {
+      setPending(null);
+    }
+  };
+
+  if (!me) return null;
+  return (
+    <Section title="Blocked commenters">
+      <Text className="mb-2 text-ink-2">
+        You don't see comments from people you block. They aren't told.
+      </Text>
+      {error ? (
+        <Text accessibilityRole="alert" className="mb-2 text-warn">
+          {error}
+        </Text>
+      ) : null}
+      {loadFailed ? (
+        <View className="flex-row items-center">
+          <Text className="mr-3 text-ink-2">Couldn't load the list.</Text>
+          <Button variant="ghost" label="Try again" onPress={() => void load()} />
+        </View>
+      ) : items?.length === 0 ? (
+        <Text testID="blocked-empty" className="text-ink-2">
+          You haven't blocked anyone.
+        </Text>
+      ) : (
+        items?.map((b) => (
+          <View key={b.id} className="flex-row items-center justify-between py-1">
+            <Text className="flex-1 text-ink">{b.displayName}</Text>
+            <Button
+              variant="ghost"
+              label="Unblock"
+              accessibilityLabel={`Unblock ${b.displayName}`}
+              busy={pending === b.id}
+              onPress={() => void unblock(b)}
+            />
+          </View>
+        ))
       )}
     </Section>
   );
@@ -183,6 +260,7 @@ export default function AccountScreen() {
           </Section>
         )}
         {me ? <ProfileSection onSaved={setNotice} /> : null}
+        {me ? <BlockedSection key={me.user.id} /> : null}
         <Section title="Plan">
           <Text testID="plan" className="mb-1 text-lg font-semibold text-ink">
             {me?.plan === "pro" ? "Pro" : "Free"}
@@ -268,6 +346,17 @@ export default function AccountScreen() {
             {APP_NAME} plays videos with YouTube's player and uses YouTube API Services. Record data
             comes from the Discogs data dumps (CC0).
           </Text>
+          <Pressable
+            testID="support-email"
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL(`mailto:${SUPPORT.email}`).catch(() => undefined)}
+            className="mt-2"
+          >
+            <Text className="text-xs text-ink-2">
+              Contact and reports: <Text className="text-accent underline">{SUPPORT.email}</Text>
+              {SUPPORT.placeholder ? " (a placeholder: the contact address isn't set yet)" : ""}
+            </Text>
+          </Pressable>
         </Section>
         {me ? (
           <Section title="Danger zone">

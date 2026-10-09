@@ -2,7 +2,7 @@
 // Free/Pro split.
 
 import { expect, type Page, test } from "@playwright/test";
-import { settle, signIn, sql } from "./helpers";
+import { clickSettled, settle, signIn, sql } from "./helpers";
 import { stubYouTube, ytCalls } from "./youtube-stub";
 
 test.beforeEach(async ({ page }) => {
@@ -172,20 +172,34 @@ test("Free: save, reload and apply a filter preset; Pro presets stay locked", as
   await expect(page.getByTestId("filter-drawer")).toContainText("That preset uses Pro filters.");
 });
 
-test("comments: pick a display name, post, see the rank, delete", async ({ page }) => {
-  await signIn(page);
+test("comments: pick a display name, post, see the rank, links refused, delete", async ({
+  page,
+}) => {
+  const userId = await signIn(page);
   await page.goto("/");
   const comments = page.getByTestId("comments");
   await expect(comments).toBeVisible();
   const name = `Digger ${Date.now().toString(36)}`;
   await comments.getByLabel("Display name").fill(name);
   await comments.getByRole("button", { name: "Save name" }).click();
-  await comments.getByLabel("Comment").fill("Break at 1:12, sampled everywhere.");
+  await comments.getByLabel("Comment", { exact: true }).fill("Break at 1:12, sampled everywhere.");
   await comments.getByRole("button", { name: "Post" }).click();
   const item = comments.getByRole("listitem").filter({ hasText: "Break at 1:12" });
   await expect(item).toContainText(name);
   await expect(item).toContainText("Newcomer");
-  await item.getByRole("button", { name: "Delete comment" }).click();
+
+  // Links are refused before anything is stored, with the reason, and the draft is kept.
+  const spam = "Full rip at example.com/rip";
+  await comments.getByLabel("Comment", { exact: true }).fill(spam);
+  await clickSettled(comments.getByRole("button", { name: "Post" }));
+  await expect(comments.getByRole("alert")).toContainText("Comments can't include links");
+  await expect(comments.getByLabel("Comment", { exact: true })).toHaveValue(spam);
+  await expect(comments.getByRole("listitem").filter({ hasText: "Full rip" })).toHaveCount(0);
+  expect(await sql("select body from comments where user_id = $1", [userId])).toEqual([
+    { body: "Break at 1:12, sampled everywhere." },
+  ]);
+
+  await clickSettled(item.getByRole("button", { name: "Delete comment" }));
   await expect(item).toHaveCount(0);
 });
 

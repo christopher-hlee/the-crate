@@ -403,3 +403,33 @@ YouTube data appears in either.
 
 A shared crate shows its records to anyone, but the owner's notes on items are left out of the
 public response.
+
+## 48. Comment moderation: blocks, a filter before posting, a contact point
+
+Supersedes the reporting part of 37. Public comments put the apps under App Store guideline
+1.2, which asks for a way to block abusive users, a filter for objectionable content, a way to
+report it with a timely response, and a published contact point.
+
+- **Blocks.** Anyone signed in can block a comment's author (`POST /api/v1/comments/:id/block`,
+  with an inline confirm on web and mobile). `user_blocks` holds blocker, blocked and an opaque
+  block ID; comment lists leave out blocked authors for the blocker only, and the blocked person
+  isn't told. `GET /api/v1/me/blocks` lists blocks by display name and block ID, and
+  `DELETE /api/v1/me/blocks/:id` unblocks, from the Account page and screen. User IDs never
+  leave the server. Up to 1,000 blocks per account. Account deletion removes rows on either
+  side.
+- **Filter before posting.** A comment is refused with a 400 when it holds a link (a scheme,
+  `www.`, or a bare domain: common endings anywhere, word-like endings such as `.me` or `.be`
+  only with a path, and a capitalized ending after a dot reads as a missed space), or a term from
+  the operator's `COMMENT_BLOCKED_TERMS` (comma separated, whole words or phrases, compared after
+  NFKC, lowercasing and dropping invisible characters). The list lives in the deployment's
+  settings, never in git. The matcher is `packages/core/src/moderation.ts`.
+- **Reports.** Only accounts with a display name can report (409 otherwise). `report_count` and
+  `hidden` are worked out from the live `comment_reports` rows (from reporters with a display
+  name) inside the report transaction, and again when a reporter's account is deleted, so
+  deleting and re-registering never stacks reports. `hidden` no longer doubles as a moderator
+  flag: moderators remove a comment by deleting it (RUNBOOK, "Moderation"). Reports are reviewed
+  within 24 hours.
+- **Contact and rules.** `NEXT_PUBLIC_SUPPORT_EMAIL` and `EXPO_PUBLIC_SUPPORT_EMAIL` appear on
+  the Terms, the Privacy policy, the site footer and the mobile Account screen. Until they are
+  set, `support@example.com` shows, marked as a placeholder. The Terms gain "What you post": the
+  rules, removal and suspension, how to report and block, and the contact.

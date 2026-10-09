@@ -1,17 +1,36 @@
 import "server-only";
-import type { Comment, MyComment } from "@app/api-client";
+import type {
+  BlockedCommenter,
+  BlockedCommentersResponse,
+  Comment,
+  MyComment,
+} from "@app/api-client";
 import {
+  type BlockedTerms,
+  COMMENT_BLOCKS_MAX,
+  COMMENT_HIDE_AFTER_REPORTS,
+  commentProblem,
   contributionPoints,
   effectivePlan,
   normalizeDisplayName,
+  parseBlockedTerms,
   type Rank,
   rankFor,
 } from "@app/core";
-import { type Pool, withTransaction } from "@app/db";
-import { HttpError, notFound } from "./http";
+import { type Pool, recountCommentReports, withTransaction } from "@app/db";
+import { badRequest, HttpError, limitReached, notFound } from "./http";
 
-/** Comments hide themselves once this many different people report them. */
-export const HIDE_AFTER_REPORTS = 3;
+/** Comments hide themselves once this many different people with a display name report them. */
+export const HIDE_AFTER_REPORTS = COMMENT_HIDE_AFTER_REPORTS;
+
+let termsCache: { raw: string | undefined; terms: BlockedTerms } | null = null;
+
+/** The operator's blocked-terms list (COMMENT_BLOCKED_TERMS), parsed once per value. */
+export function commentBlockedTerms(): BlockedTerms {
+  const raw = process.env.COMMENT_BLOCKED_TERMS;
+  if (!termsCache || termsCache.raw !== raw) termsCache = { raw, terms: parseBlockedTerms(raw) };
+  return termsCache.terms;
+}
 
 export async function profileOf(db: Pool, userId: string): Promise<{ displayName: string } | null> {
   const res = await db.query<{ display_name: string }>(
@@ -68,6 +87,7 @@ type CommentRow = {
   expires_at: Date | null;
 };
 
+/** A record's visible comments, leaving out anyone the viewer has blocked. */
 export async function listComments(
   db: Pool,
   recordKey: string,
@@ -79,8 +99,10 @@ export async function listComments(
        left join profiles p on p.user_id = c.user_id
        left join subscriptions s on s.user_id = c.user_id
       where c.record_key = $1 and not c.hidden
+        and ($2::uuid is null or not exists (
+          select 1 from user_blocks b where b.blocker_id = $2 and b.blocked_id = c.user_id))
       order by c.created_at desc limit 200`,
-    [recordKey],
+    [recordKey, viewerId],
   );
   const ranks = await ranksFor(
     db,
@@ -140,9 +162,13 @@ export async function addComment(
   userId: string,
   recordKey: string,
   body: string,
+  blockedTerms: BlockedTerms = commentBlockedTerms(),
 ): Promise<Comment> {
   const profile = await profileOf(db, userId);
   if (!profile) throw new HttpError(409, "conflict", "Choose a display name before commenting.");
+  // Links and the operator's blocked terms are refused before anything is stored.
+  const problem = commentProblem(body, blockedTerms);
+  if (problem) throw badRequest(problem);
   const known = await db.query("select 1 from record_videos where record_key = $1 limit 1", [
     recordKey,
   ]);
@@ -161,7 +187,11 @@ export async function deleteComment(db: Pool, userId: string, id: string): Promi
   if (!res.rowCount) throw notFound("That comment");
 }
 
-/** One report per person per comment; enough reports hide it until a moderator looks. */
+/**
+ * One report per person per comment, and only from people with a display name. Whether the
+ * comment hides is worked out from the live report rows in the same transaction, never from a
+ * counter, so reports from deleted accounts stop counting (DECISIONS 37).
+ */
 export async function reportComment(db: Pool, userId: string, id: string): Promise<void> {
   await withTransaction(db, async (client) => {
     const c = await client.query<{ user_id: string }>(
@@ -171,16 +201,83 @@ export async function reportComment(db: Pool, userId: string, id: string): Promi
     const row = c.rows[0];
     if (!row) throw notFound("That comment");
     if (row.user_id === userId) return;
-    const ins = await client.query(
+    const reporter = await client.query("select 1 from profiles where user_id = $1", [userId]);
+    if (!reporter.rowCount)
+      throw new HttpError(409, "conflict", "Choose a display name before reporting a comment.");
+    await client.query(
       "insert into comment_reports (comment_id, user_id) values ($1, $2) on conflict do nothing",
       [id, userId],
     );
-    if (!ins.rowCount) return;
-    await client.query(
-      `update comments set report_count = report_count + 1,
-              hidden = hidden or report_count + 1 >= $2
-        where id = $1`,
-      [id, HIDE_AFTER_REPORTS],
-    );
+    await recountCommentReports(client, [id]);
   });
+}
+
+type BlockRow = { id: string; created_at: Date; display_name: string | null };
+
+const toBlocked = (r: BlockRow): BlockedCommenter => ({
+  id: r.id,
+  displayName: r.display_name ?? "Digger",
+  blockedAt: r.created_at.toISOString(),
+});
+
+const BLOCK_SELECT = `select b.id, b.created_at, p.display_name
+   from user_blocks b left join profiles p on p.user_id = b.blocked_id`;
+
+/**
+ * Blocks a comment's author for the viewer, whose lists then leave out everything that author
+ * posts. The author's user ID never leaves the server: the viewer gets the block's own ID.
+ */
+export async function blockCommenter(
+  db: Pool,
+  userId: string,
+  commentId: string,
+): Promise<BlockedCommenter> {
+  const c = await db.query<{ user_id: string }>("select user_id from comments where id = $1", [
+    commentId,
+  ]);
+  const author = c.rows[0]?.user_id;
+  if (!author) throw notFound("That comment");
+  if (author === userId) throw badRequest("You can't block yourself.");
+  const find = async () =>
+    (
+      await db.query<BlockRow>(`${BLOCK_SELECT} where b.blocker_id = $1 and b.blocked_id = $2`, [
+        userId,
+        author,
+      ])
+    ).rows[0];
+  const existing = await find();
+  if (existing) return toBlocked(existing);
+  const count = await db.query<{ n: number }>(
+    "select count(*)::int as n from user_blocks where blocker_id = $1",
+    [userId],
+  );
+  if ((count.rows[0]?.n ?? 0) >= COMMENT_BLOCKS_MAX)
+    throw limitReached(
+      `You can block up to ${COMMENT_BLOCKS_MAX.toLocaleString("en-US")} people. Unblock someone first.`,
+    );
+  await db.query(
+    "insert into user_blocks (blocker_id, blocked_id) values ($1, $2) on conflict do nothing",
+    [userId, author],
+  );
+  return toBlocked((await find()) as BlockRow);
+}
+
+/** The commenters the viewer blocked, newest first, by display name and block ID. */
+export async function listBlockedCommenters(
+  db: Pool,
+  userId: string,
+): Promise<BlockedCommentersResponse> {
+  const res = await db.query<BlockRow>(
+    `${BLOCK_SELECT} where b.blocker_id = $1 order by b.created_at desc, b.id`,
+    [userId],
+  );
+  return { items: res.rows.map(toBlocked), max: COMMENT_BLOCKS_MAX };
+}
+
+export async function unblockCommenter(db: Pool, userId: string, id: string): Promise<void> {
+  const res = await db.query("delete from user_blocks where id = $1 and blocker_id = $2", [
+    id,
+    userId,
+  ]);
+  if (!res.rowCount) throw notFound("That block");
 }
